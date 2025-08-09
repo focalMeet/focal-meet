@@ -1,0 +1,31 @@
+@use './abstracts/variables' as *;
+@use './base/reset';
+@use './base/typography';
+@use './base/globals';
+
+/* Theme tokens */
+:root {
+  /* brand */
+  --color-primary: #ff6b6b;       /* main brand */
+  --color-primary-2: #ff5252;     /* darker brand */
+  --color-accent: #4ecdc4;        /* secondary accent */
+
+  /* surfaces */
+  --color-bg: #111111;            /* page background */
+  --color-surface: #1a1a1a;       /* cards/sections */
+}
+
+[data-theme='dark'] {
+  --color-primary: #ff6b6b;
+  --color-primary-2: #ff5252;
+  --color-accent: #4ecdc4;
+  --color-bg: #111111;
+  --color-surface: #1a1a1a;
+}
+
+/* Limit marketing styles spillover by namespacing if needed */
+.marketing {
+  /* placeholder for marketing-wide styles */
+}
+
+

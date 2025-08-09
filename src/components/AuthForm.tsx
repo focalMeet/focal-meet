@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Eye, EyeOff, Mail, Lock, Sparkles } from 'lucide-react';
 
 interface AuthFormProps {
   onAuthSuccess?: () => void;
@@ -136,8 +137,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-      {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Background decorative elements (do not block clicks) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-gradient-to-r from-teal-500/20 to-cyan-500/20 rounded-full blur-3xl"></div>
       </div>
@@ -145,18 +146,18 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       <div className="relative w-full max-w-md">
         {/* Logo and title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
+          <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <Sparkles className="w-8 h-8 text-red-400" />
             <span className="text-2xl font-bold bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent">
               Focal Meet
             </span>
-          </div>
-          <h1 className="text-2xl font-semibold text-white mb-2">
-            {isLogin ? 'Welcome Back' : 'Start Your AI Meeting Journey'}
-          </h1>
-          <p className="text-gray-400">
+          </Link>
+          {/* <h1 className="text-2xl font-semibold text-white mb-2"> */}
+            {/* {isLogin ? 'Welcome Back' : 'Start Your AI Meeting Journey'} */}
+          {/* </h1> */}
+          {/* <p className="text-gray-400">
             {isLogin ? 'Sign in to your account to manage meeting minutes' : 'Create an account to experience intelligent meeting transcription'}
-          </p>
+          </p> */}
         </div>
 
         {/* Auth form */}

@@ -1,0 +1,8 @@
+/* Minimal reset additions on top of Tailwind preflight */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+html, body {
+  height: 100%;
+}
+
