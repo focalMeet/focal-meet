@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useMarketingI18n } from '../../i18n/MarketingI18n';
 import aifuture from '../../content/blog/ai-powered-communication-future.json';
 import sentiment from '../../content/blog/real-time-sentiment-analysis.json';
 import mlee from '../../content/blog/machine-learning-meeting-efficiency.json';
@@ -337,6 +338,7 @@ function renderArticleBody(slug: string) {
 }
 
 const BlogDetail: React.FC = () => {
+  const { t } = useMarketingI18n();
   const { slug } = useParams<{ slug: string }>();
   const article = slug ? dataMap[slug] : undefined;
 
@@ -345,8 +347,8 @@ const BlogDetail: React.FC = () => {
       <section className="article-hero">
         <div className="container">
           <div className="article-hero-content" data-aos="fade-up">
-            <h1 className="article-title">Article Not Found</h1>
-            <p className="page-subtitle"><Link to="/blog">Back to Blog</Link></p>
+            <h1 className="article-title">{t.blogDetail.notFoundTitle}</h1>
+            <p className="page-subtitle"><Link to="/blog">{t.blogDetail.backToBlog}</Link></p>
           </div>
         </div>
       </section>
@@ -359,7 +361,7 @@ const BlogDetail: React.FC = () => {
         <div className="container">
           <div className="article-hero-content" data-aos="fade-up">
             <div className="article-breadcrumb">
-              <Link to="/blog">Blog</Link>
+              <Link to="/blog">{t.blogDetail.breadcrumbBlog}</Link>
               <span className="breadcrumb-separator">→</span>
               <span className="breadcrumb-current">{article.category}</span>
             </div>
@@ -391,22 +393,22 @@ const BlogDetail: React.FC = () => {
             </div>
             <aside className="article-sidebar" data-aos="fade-left" data-aos-delay={200}>
               <div className="sidebar-widget toc-widget">
-                <h3 className="widget-title">Table of Contents</h3>
+                <h3 className="widget-title">{t.blogDetail.tocTitle}</h3>
                 {renderToc(slug!)}
               </div>
               <div className="sidebar-widget related-widget">
-                <h3 className="widget-title">Related Articles</h3>
+                <h3 className="widget-title">{t.blogDetail.relatedTitle}</h3>
                 <div className="related-articles">
                   <article className="related-article"><div className="related-image"><div className="image-placeholder">Article Image</div></div><div className="related-content"><span className="related-category">AI Technology</span><h4 className="related-title">Understanding Neural Language Models</h4><span className="related-date">November 8, 2024</span></div></article>
                   <article className="related-article"><div className="related-image"><div className="image-placeholder">Article Image</div></div><div className="related-content"><span className="related-category">Product Updates</span><h4 className="related-title">Real-Time Sentiment Analysis</h4><span className="related-date">December 10, 2024</span></div></article>
                 </div>
               </div>
               <div className="sidebar-widget newsletter-widget">
-                <h3 className="widget-title">Stay Updated</h3>
-                <p>Get the latest AI insights delivered to your inbox.</p>
+                <h3 className="widget-title">{t.blogDetail.sidebarNewsletterTitle}</h3>
+                <p>{t.blogDetail.sidebarNewsletterDesc}</p>
                 <form className="newsletter-form-sidebar">
-                  <input type="email" placeholder="Your email address" className="newsletter-input-sidebar" />
-                  <button type="submit" className="btn btn-primary newsletter-btn-sidebar">Subscribe</button>
+                  <input type="email" placeholder={t.blogDetail.sidebarNewsletterEmailPlaceholder} className="newsletter-input-sidebar" />
+                  <button type="submit" className="btn btn-primary newsletter-btn-sidebar">{t.blogDetail.sidebarNewsletterSubscribe}</button>
                 </form>
               </div>
             </aside>
@@ -417,14 +419,14 @@ const BlogDetail: React.FC = () => {
       <section className="comments-section">
         <div className="container">
           <div className="comments-wrapper" data-aos="fade-up">
-            <h3 className="comments-title">Join the Discussion</h3>
-            <p className="comments-subtitle">Share your thoughts on the future of AI-powered communication</p>
+            <h3 className="comments-title">{t.blogDetail.commentsTitle}</h3>
+            <p className="comments-subtitle">{t.blogDetail.commentsSubtitle}</p>
             <div className="comment-form">
               <form>
-                <div className="form-group"><label htmlFor="comment-name">Name</label><input id="comment-name" name="name" required /></div>
-                <div className="form-group"><label htmlFor="comment-email">Email</label><input id="comment-email" name="email" type="email" required /></div>
-                <div className="form-group"><label htmlFor="comment-message">Your Comment</label><textarea id="comment-message" name="message" rows={5} required /></div>
-                <button type="submit" className="btn btn-primary">Post Comment</button>
+                <div className="form-group"><label htmlFor="comment-name">{t.blogDetail.commentForm.name}</label><input id="comment-name" name="name" required /></div>
+                <div className="form-group"><label htmlFor="comment-email">{t.blogDetail.commentForm.email}</label><input id="comment-email" name="email" type="email" required /></div>
+                <div className="form-group"><label htmlFor="comment-message">{t.blogDetail.commentForm.message}</label><textarea id="comment-message" name="message" rows={5} required /></div>
+                <button type="submit" className="btn btn-primary">{t.blogDetail.commentForm.submit}</button>
               </form>
             </div>
           </div>

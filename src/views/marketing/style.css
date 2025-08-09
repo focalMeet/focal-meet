@@ -501,6 +501,13 @@ header .nav-right .btn-contact:hover {
     height: 300px;
 }
 
+/* Prevent hover grow for tiny utility buttons like lang switch */
+.btn.btn-no-ripple::before,
+.btn.btn-no-ripple:hover::before {
+    width: 0;
+    height: 0;
+}
+
 .btn span,
 .btn svg {
     position: relative;
@@ -1636,10 +1643,10 @@ html {
 }
 
 .timeline-marker {
-    width: 80px;
-    height: 80px;
+    width: 105px;
+    height: 55px;
     background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
-    border-radius: 50%;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2241,6 +2248,12 @@ input:checked + .slider:before {
     align-items: baseline;
     justify-content: center;
     gap: 5px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.plan-price.switching {
+    opacity: 0.0;
+    transform: translateY(4px);
 }
 
 .price-amount {

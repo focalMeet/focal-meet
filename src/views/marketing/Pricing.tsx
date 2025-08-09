@@ -1,16 +1,39 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useMarketingI18n } from "../../i18n/MarketingI18n";
 
 const Pricing: React.FC = () => {
+  const { t } = useMarketingI18n();
+  useEffect(() => {
+    const section = document.querySelector('.pricing-plans');
+    const toggle = document.getElementById('billing-toggle') as HTMLInputElement | null;
+    if (!toggle || !section) return;
+    const monthly = section.querySelectorAll('.monthly');
+    const annual = section.querySelectorAll('.annual');
+    const priceContainers = section.querySelectorAll('.plan-price');
+    const update = () => {
+      priceContainers.forEach(el => el.classList.add('switching'));
+      window.setTimeout(() => {
+        if (toggle.checked) {
+          monthly.forEach(el => (el as HTMLElement).style.display = 'none');
+          annual.forEach(el => (el as HTMLElement).style.display = 'inline');
+        } else {
+          monthly.forEach(el => (el as HTMLElement).style.display = 'inline');
+          annual.forEach(el => (el as HTMLElement).style.display = 'none');
+        }
+        window.setTimeout(() => priceContainers.forEach(el => el.classList.remove('switching')), 10);
+      }, 150);
+    };
+    toggle.addEventListener('change', update);
+    update();
+    return () => toggle.removeEventListener('change', update);
+  }, []);
   return (
     <>
       <section className="pricing-hero">
         <div className="container">
           <div className="pricing-hero-content" data-aos="fade-up">
             {/* <h1 className="page-title">Find the Plan That's Right for You</h1> */}
-            <p className="page-subtitle">
-              Choose from our flexible pricing plans designed to scale with your
-              team's needs. Start free and upgrade as you grow.
-            </p>
+            <p className="page-subtitle">{t.pricing.heroSubtitle}</p>
             {/* 移动到价格列表上方 */}
           </div>
         </div>
@@ -23,62 +46,17 @@ const Pricing: React.FC = () => {
             data-aos="fade-up"
             data-aos-delay="0"
           >
-            <span className="toggle-label">Monthly</span>
+            <span className="toggle-label">{t.pricing.billingMonthly}</span>
             <label className="toggle-switch">
               <input type="checkbox" id="billing-toggle" />
               <span className="slider"></span>
             </label>
             <span className="toggle-label">
-              Annual <span className="discount-badge">Save 20%</span>
+              {t.pricing.billingAnnual} <span className="discount-badge">{t.pricing.savePercent}</span>
             </span>
           </div>
           <div className="plans-grid">
-            {[
-              {
-                name: "Basic",
-                desc: "Perfect for small teams getting started",
-                monthly: "Free",
-                annual: "Free",
-                features: [
-                  "40-minute meeting limit",
-                  "Basic AI transcription",
-                  "1GB cloud storage",
-                  "Email support",
-                ],
-                cta: "Get Started Free",
-                primary: false,
-              },
-              {
-                name: "Pro",
-                desc: "Ideal for growing teams and businesses",
-                monthly: "$17.99",
-                annual: "$14.99",
-                features: [
-                  "3 hours meeting duration",
-                  "Advanced AI analytics & insights",
-                  "Multi-language transcription",
-                  "10GB cloud storage",
-                  "Priority support",
-                ],
-                cta: "Start Pro Trial",
-                primary: true,
-              },
-              {
-                name: "Enterprise",
-                desc: "For large organizations with advanced needs",
-                monthly: "$99",
-                annual: "$79",
-                features: [
-                  "Unlimited meeting duration",
-                  "Custom AI model training",
-                  "Unlimited cloud storage",
-                  "Dedicated account manager",
-                  "24/7 phone & chat support",
-                ],
-                cta: "Contact Sales",
-                primary: false,
-              },
-            ].map((plan, i) => (
+            {t.pricing.plans.map((plan, i) => (
               <div
                 className={`pricing-card ${plan.primary ? "featured" : ""}`}
                 key={plan.name}
@@ -86,7 +64,7 @@ const Pricing: React.FC = () => {
                 data-aos-delay={(i + 1) * 100}
               >
                 {plan.primary && (
-                  <div className="popular-badge">Most Popular</div>
+                  <div className="popular-badge">{t.pricing.mostPopular}</div>
                 )}
                 <div className="plan-header">
                   <h3 className="plan-name">{plan.name}</h3>
@@ -100,7 +78,7 @@ const Pricing: React.FC = () => {
                       {plan.annual}
                     </span>
                     <span className="price-period">
-                    {plan.name !== "Basic" ? "/month" : ""}
+                    {plan.name !== "Basic" ? t.pricing.pricePerMonth : ""}
                     </span>
                   </div>
                 </div>
@@ -124,11 +102,9 @@ const Pricing: React.FC = () => {
                     ))}
                   </ul>
                 </div>
-                <button
-                  className={`plan-cta btn ${plan.primary ? "btn-primary" : "btn-secondary"}`}
-                >
+                 <button className={`plan-cta btn ${plan.primary ? "btn-primary" : "btn-secondary"}`}>
                   {plan.cta}
-                </button>
+                 </button>
               </div>
             ))}
           </div>
@@ -138,38 +114,11 @@ const Pricing: React.FC = () => {
       <section className="faq-section">
         <div className="container">
           <div className="faq-header" data-aos="fade-up">
-            <h2 className="section-title">Frequently Asked Questions</h2>
-            <p className="section-subtitle">
-              Everything you need to know about our pricing and features
-            </p>
+            <h2 className="section-title">{t.pricing.faqTitle}</h2>
+            <p className="section-subtitle">{t.pricing.faqSubtitle}</p>
           </div>
           <div className="faq-list" data-aos="fade-up" data-aos-delay="100">
-            {[
-              [
-                "Can I switch between plans anytime?",
-                "Yes, you can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle, and we'll prorate any differences.",
-              ],
-              [
-                "Is there a free trial for paid plans?",
-                "Yes! We offer a 14-day free trial for both Pro and Enterprise plans. No credit card required to start your trial.",
-              ],
-              [
-                "What payment methods do you accept?",
-                "We accept all major credit cards (Visa, MasterCard, American Express), PayPal, and bank transfers for Enterprise plans.",
-              ],
-              [
-                "How does the AI transcription work?",
-                "Our AI transcription uses advanced neural networks to convert speech to text in real-time with 95%+ accuracy. It supports 40+ languages and can identify different speakers.",
-              ],
-              [
-                "Is my data secure and private?",
-                "Absolutely. We use end-to-end encryption, comply with GDPR and SOC 2 standards, and never use your data to train our AI models without explicit consent.",
-              ],
-              [
-                "Can I integrate Focal Meet with other tools?",
-                "Yes! We offer integrations with popular tools like Slack, Microsoft Teams, Google Calendar, Zoom, and many more. Enterprise plans include API access for custom integrations.",
-              ],
-            ].map(([q, a]) => (
+            {t.pricing.faqs.map(({ q, a }) => (
               <div className="faq-item" key={q}>
                 <button className="faq-question">
                   <span>{q}</span>
@@ -185,9 +134,7 @@ const Pricing: React.FC = () => {
                     <polyline points="6,9 12,15 18,9"></polyline>
                   </svg>
                 </button>
-                <div className="faq-answer">
-                  <p>{a}</p>
-                </div>
+                <div className="faq-answer"><p>{a}</p></div>
               </div>
             ))}
           </div>
@@ -197,14 +144,11 @@ const Pricing: React.FC = () => {
       <section className="pricing-cta">
         <div className="container">
           <div className="cta-content" data-aos="fade-up">
-            <h2 className="cta-title">Ready to Transform Your Meetings?</h2>
-            <p className="cta-subtitle">
-              Join thousands of teams already using Focal Meet to enhance their
-              communication
-            </p>
+            <h2 className="cta-title">{t.pricing.ctaTitle}</h2>
+            <p className="cta-subtitle">{t.pricing.ctaSubtitle}</p>
             <div className="cta-buttons">
-              <button className="btn btn-primary">Start Free Trial</button>
-              <button className="btn btn-secondary">Schedule Demo</button>
+              <button className="btn btn-primary">{t.pricing.ctaPrimary}</button>
+              <button className="btn btn-secondary">{t.pricing.ctaSecondary}</button>
             </div>
           </div>
         </div>

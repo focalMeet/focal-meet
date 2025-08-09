@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useMarketingI18n } from '../i18n/MarketingI18n';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import '../styles/marketing.scss';
 
 const MarketingLayout: React.FC = () => {
+  const { t, toggle } = useMarketingI18n();
   const location = useLocation();
 
   useEffect(() => {
@@ -15,7 +17,7 @@ const MarketingLayout: React.FC = () => {
     const pre2 = document.createElement('link');
     pre2.rel = 'preconnect';
     pre2.href = 'https://fonts.gstatic.com';
-    pre2.crossOrigin = 'anonymous' as any;
+    pre2.crossOrigin = 'anonymous';
     const font = document.createElement('link');
     font.rel = 'stylesheet';
     font.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap';
@@ -24,7 +26,7 @@ const MarketingLayout: React.FC = () => {
     document.head.appendChild(font);
 
     // AOS
-    (window as any).AOS = AOS;
+    (window as unknown as { AOS?: typeof AOS }).AOS = AOS;
     AOS.init({ duration: 1000, easing: 'ease-out-cubic', once: true, offset: 100 });
 
     // Header scroll effect
@@ -57,6 +59,7 @@ const MarketingLayout: React.FC = () => {
       const target = e.target as HTMLElement;
       const button = target.closest('.btn, .btn-contact') as HTMLElement | null;
       if (!button) return;
+      if (button.classList.contains('btn-no-ripple')) return;
       const ripple = document.createElement('span');
       const rect = button.getBoundingClientRect();
       const size = Math.max(rect.width, rect.height);
@@ -114,10 +117,11 @@ const MarketingLayout: React.FC = () => {
       const searchBtn = document.querySelector('.search-btn');
       if (filterTags.length) {
         filterTags.forEach((tag) => {
-          tag.addEventListener('click', function () {
+          tag.addEventListener('click', (ev) => {
             filterTags.forEach((t) => t.classList.remove('active'));
-            this.classList.add('active');
-            const value = (this as HTMLElement).textContent?.trim() || 'All';
+            const self = ev.currentTarget as HTMLElement;
+            self.classList.add('active');
+            const value = self.textContent?.trim() || 'All';
             blogCards.forEach((card) => {
               const cat = card.querySelector('.article-category')?.textContent?.trim();
               (card as HTMLElement).style.display = value === 'All' || cat === value ? 'block' : 'none';
@@ -150,9 +154,9 @@ const MarketingLayout: React.FC = () => {
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('click', onClick);
       document.removeEventListener('click', onButtonClick);
-      try { document.head.removeChild(pre1); } catch {}
-      try { document.head.removeChild(pre2); } catch {}
-      try { document.head.removeChild(font); } catch {}
+      try { document.head.removeChild(pre1); } catch { /* noop */ }
+      try { document.head.removeChild(pre2); } catch { /* noop */ }
+      try { document.head.removeChild(font); } catch { /* noop */ }
     };
   }, []);
 
@@ -170,16 +174,19 @@ const MarketingLayout: React.FC = () => {
               <div className="nav-left">
                 <Link to="/" className="logo"><span>Focal Meet</span></Link>
                 <ul className="nav-links">
-                  <li><Link to="/">Home</Link></li>
-                  <li><Link to="/about">About</Link></li>
-                  <li><Link to="/features">Features</Link></li>
-                  <li><Link to="/blog">Blog</Link></li>
-                  <li><Link to="/pricing">Pricing</Link></li>
+                  <li><Link to="/">{t.nav.home}</Link></li>
+                  <li><Link to="/about">{t.nav.about}</Link></li>
+                  <li><Link to="/features">{t.nav.features}</Link></li>
+                  <li><Link to="/blog">{t.nav.blog}</Link></li>
+                  <li><Link to="/pricing">{t.nav.pricing}</Link></li>
                 </ul>
               </div>
               <div className="nav-right">
-                <Link to="/app/login" className="btn btn-primary" style={{ textDecoration: 'none' }}>Sign In</Link>
-                <button className="btn-contact">Contact Us</button>
+                <button className="btn btn-secondary btn-no-ripple" onClick={toggle} aria-label="switch-language">
+                  {t.nav.switch}
+                </button>
+                <Link to="/app/login" className="btn btn-primary" style={{ textDecoration: 'none' }}>{t.nav.signIn}</Link>
+                {/* <button className="btn-contact">Contact Us</button> */}
               </div>
             </div>
           </div>
@@ -195,44 +202,44 @@ const MarketingLayout: React.FC = () => {
           <div className="footer-container">
             <div className="footer-logo" data-aos="fade-up">
               <span className="logo-text">Focal Meet</span>
-              <p className="footer-tagline">Unlock the Future Meeting knowledge with Focal Meet powered by AI</p>
+              <p className="footer-tagline">{t.footer.tagline}</p>
             </div>
 
             <div className="footer-links" data-aos="fade-up" data-aos-delay="100">
               <div className="footer-column">
-                <h4 className="footer-column-title">Explore</h4>
+                <h4 className="footer-column-title">{t.footer.columns.exploreTitle}</h4>
                 <ul className="footer-link-list">
-                  <li><a href="#home">Home</a></li>
-                  <li><a href="#about">About</a></li>
-                  <li><a href="#features">Features</a></li>
-                  <li><a href="#pricing">Pricing</a></li>
+                  <li><a href="#home">{t.footer.columns.explore.home}</a></li>
+                  <li><a href="#about">{t.footer.columns.explore.about}</a></li>
+                  <li><a href="#features">{t.footer.columns.explore.features}</a></li>
+                  <li><a href="#pricing">{t.footer.columns.explore.pricing}</a></li>
                 </ul>
               </div>
               <div className="footer-column">
-                <h4 className="footer-column-title">Support</h4>
+                <h4 className="footer-column-title">{t.footer.columns.supportTitle}</h4>
                 <ul className="footer-link-list">
-                  <li><a href="#contact">Contact</a></li>
-                  <li><a href="#faq">FAQ</a></li>
-                  <li><a href="#help">Help Center</a></li>
-                  <li><a href="#documentation">Documentation</a></li>
+                  <li><a href="#contact">{t.footer.columns.support.contact}</a></li>
+                  <li><a href="#faq">{t.footer.columns.support.faq}</a></li>
+                  <li><a href="#help">{t.footer.columns.support.help}</a></li>
+                  <li><a href="#documentation">{t.footer.columns.support.docs}</a></li>
                 </ul>
               </div>
               <div className="footer-column">
-                <h4 className="footer-column-title">Others</h4>
+                <h4 className="footer-column-title">{t.footer.columns.othersTitle}</h4>
                 <ul className="footer-link-list">
-                  <li><a href="#style-guide">Style Guide</a></li>
-                  <li><a href="#blog">Blog</a></li>
-                  <li><a href="#instructions">Instructions</a></li>
-                  <li><a href="#changelog">Changelog</a></li>
+                  <li><a href="#style-guide">{t.footer.columns.others.styleGuide}</a></li>
+                  <li><a href="#blog">{t.footer.columns.others.blog}</a></li>
+                  <li><a href="#instructions">{t.footer.columns.others.instructions}</a></li>
+                  <li><a href="#changelog">{t.footer.columns.others.changelog}</a></li>
                 </ul>
               </div>
               <div className="footer-column">
-                <h4 className="footer-column-title">Utility</h4>
+                <h4 className="footer-column-title">{t.footer.columns.utilityTitle}</h4>
                 <ul className="footer-link-list">
-                  <li><a href="#password">Password</a></li>
-                  <li><a href="#license">License</a></li>
-                  <li><a href="#privacy">Privacy Policy</a></li>
-                  <li><a href="#terms">Terms of Service</a></li>
+                  <li><a href="#password">{t.footer.columns.utility.password}</a></li>
+                  <li><a href="#license">{t.footer.columns.utility.license}</a></li>
+                  <li><a href="#privacy">{t.footer.columns.utility.privacy}</a></li>
+                  <li><a href="#terms">{t.footer.columns.utility.terms}</a></li>
                 </ul>
               </div>
             </div>
@@ -259,9 +266,9 @@ const MarketingLayout: React.FC = () => {
             <div className="footer-bottom-content">
               <p className="copyright">Copyright © {new Date().getFullYear()} Design & Developed by <span className="highlight">Focal Meet Team</span></p>
               <div className="footer-bottom-links">
-                <a href="#privacy">Privacy Policy</a>
-                <a href="#terms">Terms of Service</a>
-                <a href="#cookies">Cookie Policy</a>
+                <a href="#privacy">{t.footer.bottom.privacy}</a>
+                <a href="#terms">{t.footer.bottom.terms}</a>
+                <a href="#cookies">{t.footer.bottom.cookies}</a>
               </div>
             </div>
           </div>
