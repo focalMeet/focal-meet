@@ -1,0 +1,38 @@
+{
+  "slug": "real-time-sentiment-analysis",
+  "title": "Introducing Real-Time Sentiment Analysis",
+  "category": "Product Updates",
+  "date": "December 10, 2024",
+  "readTime": "6 min read",
+  "author": { "name": "Focal Meet Product Team", "role": "Product" },
+  "sections": [
+    { "id": "why-matters", "type": "h2", "text": "Why Sentiment Analysis Matters" },
+    { "type": "p", "text": "Effective communication is about more than just words. The tone, emotion, and underlying sentiment of conversations carry crucial information that can make or break team collaboration." },
+    { "id": "how-works", "type": "h2", "text": "How It Works" },
+    { "type": "ul", "items": [
+      "Emotional States: Happiness, frustration, excitement, concern, and more",
+      "Communication Patterns: Who's engaged, who might need support",
+      "Team Dynamics: Overall group sentiment and energy levels",
+      "Risk Indicators: Early warning signs of miscommunication or conflict"
+    ]},
+    { "type": "callout", "title": "Privacy-First Design", "text": "All sentiment analysis happens in real-time during your meeting and is never stored or shared." },
+    { "id": "key-features", "type": "h2", "text": "Key Features" },
+    { "type": "p", "text": "Live Sentiment Dashboard, Individual Insights, Team Health Metrics" },
+    { "type": "quote", "text": "This feature has transformed how our leadership team communicates. We can now address concerns before they become problems.", "cite": "Sarah Kim, VP of Operations at TechCorp" },
+    { "id": "getting-started", "type": "h2", "text": "Getting Started" },
+    { "type": "ol", "items": [
+      "Navigate to your meeting settings",
+      "Enable Sentiment Analysis in the AI Features section",
+      "Choose your privacy preferences",
+      "Start your next meeting"
+    ]},
+    { "id": "whats-next", "type": "h2", "text": "What's Next?" },
+    { "type": "cards", "items": [
+      { "title": "Emotion-Based Scheduling", "text": "AI that suggests optimal meeting times based on team energy patterns." },
+      { "title": "Stress Detection", "text": "Early warning systems for team burnout and stress." },
+      { "title": "Communication Coaching", "text": "Real-time suggestions for more empathetic communication." }
+    ]}
+  ]
+}
+
+

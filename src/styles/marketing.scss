@@ -1,0 +1,7 @@
+/* Marketing bundle: central import point for landing styles */
+@use './index.scss';
+
+/* Import existing marketing CSS until we fully migrate to SCSS modules */
+@import '../views/marketing/style.css';
+
+
