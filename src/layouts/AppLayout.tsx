@@ -47,6 +47,12 @@ const AppLayout: React.FC = () => {
                 Dashboard
               </NavLink>
               <NavLink
+                to="/app/meetings"
+                className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+              >
+                Meetings
+              </NavLink>
+              <NavLink
                 to="/app/live"
                 className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
               >

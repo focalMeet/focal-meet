@@ -35,6 +35,7 @@ const SideNav: React.FC = () => {
       <NavLink to="/app/account/usage" className={({ isActive }) => `${baseClass} ${isActive ? active : inactive}`}>Usage</NavLink>
       <NavLink to="/app/account/subscription" className={({ isActive }) => `${baseClass} ${isActive ? active : inactive}`}>Subscription</NavLink>
       <NavLink to="/app/account/billing" className={({ isActive }) => `${baseClass} ${isActive ? active : inactive}`}>Billing</NavLink>
+      <NavLink to="/app/account/invitations" className={({ isActive }) => `${baseClass} ${isActive ? active : inactive}`}>Invitations</NavLink>
     </nav>
   );
 };
@@ -146,6 +147,104 @@ const Billing: React.FC = () => {
   );
 };
 
+import { createInvitation, listMyInvitations, InvitationRead } from '../../lib/api';
+
+const Invitations: React.FC = () => {
+  const [items, setItems] = React.useState<InvitationRead[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [creating, setCreating] = React.useState(false);
+  const [lastLink, setLastLink] = React.useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await listMyInvitations();
+      setItems(res.data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load invitations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    load();
+  }, []);
+
+  const handleCreate = async () => {
+    setCreating(true);
+    setLastLink(null);
+    try {
+      const res = await createInvitation();
+      setLastLink(res.invitationUrl);
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create invitation');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Invitations</h2>
+        <button onClick={handleCreate} disabled={creating} className="px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-gray-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed">{creating ? 'Creating...' : 'Create Link'}</button>
+      </div>
+      {lastLink && (
+        <div className="p-3 rounded-lg border border-white/10 bg-white/5 text-sm text-gray-200">
+          New link: <span className="underline break-all">{lastLink}</span>
+        </div>
+      )}
+      {loading && <div className="text-gray-400 text-sm">Loading...</div>}
+      {error && !loading && <div className="text-red-400 text-sm">{error}</div>}
+      {!loading && !error && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-400">
+                <th className="py-2 pr-4">Token</th>
+                <th className="py-2 pr-4">Created</th>
+                <th className="py-2 pr-4">Usage</th>
+                <th className="py-2">Used by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id} className="border-t border-white/10 align-top">
+                  <td className="py-2 pr-4">
+                    <div className="break-all text-gray-200">{it.token}</div>
+                  </td>
+                  <td className="py-2 pr-4">{it.created_at ? new Date(it.created_at).toLocaleString() : '—'}</td>
+                  <td className="py-2 pr-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-white/10 bg-white/5 text-gray-200">
+                      {it.used_count}/{it.max_uses} used · {it.remaining_uses} left
+                    </span>
+                  </td>
+                  <td className="py-2">
+                    <div className="space-y-1">
+                      {it.uses.length === 0 && <div className="text-gray-400">—</div>}
+                      {it.uses.map((u, idx) => (
+                        <div key={idx} className="text-gray-300">
+                          <span className="text-xs text-gray-400">{new Date(u.used_at).toLocaleString()}</span>
+                          {" · "}
+                          <span className="font-mono">{u.used_by_user_id}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AccountPage: React.FC = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -170,6 +269,7 @@ const AccountPage: React.FC = () => {
               <Route path="usage" element={<Usage />} />
               <Route path="subscription" element={<Subscription />} />
               <Route path="billing" element={<Billing />} />
+              <Route path="invitations" element={<Invitations />} />
             </Routes>
             <Outlet />
           </div>

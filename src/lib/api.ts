@@ -207,4 +207,10 @@ export async function createInvitation(): Promise<{ invitationUrl: string; token
   return apiFetch('/invitations', { method: 'POST' });
 }
 
+export type InvitationUse = { used_by_user_id: string; used_at: string };
+export type InvitationRead = { id: string; token: string; created_at: string | null; max_uses: number; used_count: number; remaining_uses: number; uses: InvitationUse[] };
+export async function listMyInvitations(): Promise<{ data: InvitationRead[] }> {
+  return apiFetch('/invitations/mine');
+}
+
 

@@ -11,6 +11,7 @@ import BlogDetail from '../views/marketing/BlogDetail';
 import NotFound from '../views/NotFound';
 import LoginPage from '../views/app/LoginPage';
 import DashboardPage from '../views/app/DashboardPage';
+import MeetingsPage from '../views/app/MeetingsPage';
 import MeetingDetailPage from '../views/app/MeetingDetailPage';
 import LiveRecord from '../components/LiveRecord';
 import UploadPage from '../views/app/UploadPage';
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
     children: [
       { path: 'login', element: <LoginPage /> },
       { path: 'dashboard', element: <DashboardPage /> },
+      { path: 'meetings', element: <MeetingsPage /> },
       { path: 'meetings/:id', element: <MeetingDetailPage /> },
       { path: 'live', element: <LiveRecord /> },
       { path: 'upload', element: <UploadPage /> },
