@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { clearToken, isAuthenticated } from '../lib/auth';
 import { me } from '../lib/api';
 import logoMark from '../assets/logo-mark.svg';
@@ -30,7 +30,7 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      <div role="banner" className="relative bg-black/20 backdrop-blur-lg border-b border-white/10">
+      <div role="banner" className="sticky top-0 z-50 bg-black/20 backdrop-blur-lg border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center">
@@ -40,12 +40,40 @@ const AppLayout: React.FC = () => {
               </span>
             </Link>
             <nav className="hidden md:flex space-x-4 text-sm text-gray-300 items-center">
-              <Link to="/app/dashboard" className="hover:text-white">Dashboard</Link>
-              <Link to="/app/live" className="hover:text-white">Live</Link>
-                <Link to="/app/upload" className="hover:text-white">Upload</Link>
-                <Link to="/app/templates" className="hover:text-white">Templates</Link>
+              <NavLink
+                to="/app/dashboard"
+                className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+              >
+                Dashboard
+              </NavLink>
+              <NavLink
+                to="/app/live"
+                className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+              >
+                Live
+              </NavLink>
+              <NavLink
+                to="/app/upload"
+                className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+              >
+                Upload
+              </NavLink>
+              <NavLink
+                to="/app/templates"
+                className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+              >
+                Templates
+              </NavLink>
+              <NavLink
+                to="/app/account"
+                className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+              >
+                Account
+              </NavLink>
               {user && (
-                <span className="text-xs text-gray-400">{loadingUser ? 'Loading...' : user.email}</span>
+                <Link to="/app/account" className="text-xs text-gray-300 hover:text-white underline/0 hover:underline">
+                  {loadingUser ? 'Loading...' : user.email}
+                </Link>
               )}
               {isAuthenticated() && (
                 <button
