@@ -199,52 +199,47 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-red-500/10 to-orange-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Header */}
-      <div className="relative bg-black/20 backdrop-blur-lg border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <button
-                onClick={onBack}
-                className="mr-4 p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-xl font-semibold text-white">{session?.title || 'Meeting'}</h1>
-                <div className="flex items-center space-x-4 text-sm text-gray-400">
-                  <span className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    {session ? new Date(session.created_at).toLocaleString() : '—'}
-                  </span>
-                  <span className="flex items-center">
-                    <Clock className="w-4 h-4 mr-1" />
-                    {session ? `Updated ${new Date(session.updated_at).toLocaleString()}` : '—'}
-                  </span>
-                </div>
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page-level heading and actions (moved from internal header) */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <button
+              onClick={onBack}
+              className="mr-4 p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-xl font-semibold text-white">{session?.title || 'Meeting'}</h1>
+              <div className="flex items-center space-x-4 text-sm text-gray-400">
+                <span className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-1" />
+                  {session ? new Date(session.created_at).toLocaleString() : '—'}
+                </span>
+                <span className="flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  {session ? `Updated ${new Date(session.updated_at).toLocaleString()}` : '—'}
+                </span>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </button>
-              <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5" onClick={handleShare}>
-                <Share2 className="w-4 h-4 mr-2" />
-                Share
-              </button>
-            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </button>
+            <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5" onClick={handleShare}>
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading && (
           <div className="text-center text-gray-400 py-12">Loading...</div>
         )}
