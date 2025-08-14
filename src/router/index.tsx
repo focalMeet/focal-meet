@@ -34,10 +34,13 @@ const router = createBrowserRouter([
     ],
   },
   {
+    path: '/app/login',
+    element: <LoginPage />,
+  },
+  {
     path: '/app',
     element: <AppLayout />,
     children: [
-      { path: 'login', element: <LoginPage /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'meetings', element: <MeetingsPage /> },
       { path: 'meetings/:id', element: <MeetingDetailPage /> },

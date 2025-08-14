@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Debug</title>
+</head>
+<body>
+    <h1>Token Debug 测试</h1>
+    <div>
+        <button onclick="checkToken()">检查本地 Token</button>
+        <button onclick="testLogin()">测试登录</button>
+        <button onclick="testSessions()">测试 Sessions API</button>
+        <button onclick="clearStorage()">清除 Token</button>
+    </div>
+    <div id="output" style="margin-top: 20px; white-space: pre-wrap; font-family: monospace;"></div>
+
+    <script>
+        const API_BASE = '/api';
+        const TOKEN_KEY = 'fm_access_token';
+
+        function log(message) {
+            const output = document.getElementById('output');
+            output.textContent += new Date().toISOString() + ': ' + message + '\n';
+            console.log(message);
+        }
+
+        function getToken() {
+            try {
+                return localStorage.getItem(TOKEN_KEY);
+            } catch {
+                return null;
+            }
+        }
+
+        function setToken(token) {
+            try {
+                localStorage.setItem(TOKEN_KEY, token);
+            } catch {
+                // ignore
+            }
+        }
+
+        function checkToken() {
+            const token = getToken();
+            if (token) {
+                log('Local token: ' + token.substring(0, 20) + '...');
+            } else {
+                log('No token found in localStorage');
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const body = new URLSearchParams({ username: 'demo@focalmeet.com', password: 'Demo123456' });
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body,
+                });
+                const json = await res.json();
+                
+                if (res.ok) {
+                    log('Login success: ' + json.access_token.substring(0, 20) + '...');
+                    setToken(json.access_token);
+                } else {
+                    log('Login failed: ' + JSON.stringify(json));
+                }
+            } catch (e) {
+                log('Login error: ' + e.message);
+            }
+        }
+
+        async function testSessions() {
+            const token = getToken();
+            if (!token) {
+                log('No token available for sessions test');
+                return;
+            }
+
+            try {
+                log('Testing sessions API with token: ' + token.substring(0, 20) + '...');
+                
+                const res = await fetch(`${API_BASE}/sessions/`, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                log('Sessions API response status: ' + res.status);
+                
+                if (res.ok) {
+                    const sessions = await res.json();
+                    log('Sessions API success: ' + JSON.stringify(sessions, null, 2));
+                } else {
+                    const errorText = await res.text();
+                    log('Sessions API error: ' + errorText);
+                }
+            } catch (e) {
+                log('Sessions API exception: ' + e.message);
+            }
+        }
+
+        function clearStorage() {
+            localStorage.removeItem(TOKEN_KEY);
+            log('Token cleared from localStorage');
+        }
+    </script>
+</body>
+</html>

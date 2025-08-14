@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, Sparkles } from 'lucide-react';
-import { login } from '../lib/api';
+import { login, register } from '../lib/api';
 import { setToken } from '../lib/auth';
 
 interface AuthFormProps {
@@ -88,14 +87,20 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       try {
         if (isLogin) {
           const resp = await login(formData.email, formData.password);
+          console.log('[AUTH] Login success, token:', resp.access_token.substring(0, 20) + '...');
           setToken(resp.access_token);
           onAuthSuccess?.();
         } else {
-          // 简化：注册后直接跳转登录页逻辑交给上层，这里暂不实现注册API
+          await register({ email: formData.email, password: formData.password });
+          // 注册成功后，自动登录
+          const resp = await login(formData.email, formData.password);
+          console.log('[AUTH] Register + login success, token:', resp.access_token.substring(0, 20) + '...');
+          setToken(resp.access_token);
           onAuthSuccess?.();
         }
       } catch (e: any) {
-        setErrors({ email: 'Login failed. Please check your credentials.' });
+        const msg = isLogin ? 'Login failed. Please check your credentials.' : 'Registration failed. Email may be in use.';
+        setErrors({ email: msg });
       }
     }
 
@@ -128,7 +133,15 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 relative">
+      {/* Logo in top left corner */}
+      <div className="absolute top-6 left-6 flex items-center gap-2 z-10">
+        <Sparkles className="w-8 h-8 text-red-400" />
+        <span className="text-xl font-bold bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent">
+          Focal Meet
+        </span>
+      </div>
+
       {/* Background decorative elements (do not block clicks) */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-full blur-3xl"></div>
@@ -138,12 +151,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       <div className="relative w-full max-w-md">
         {/* Logo and title */}
         <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-4">
+          {/* <Link to="/" className="inline-flex items-center gap-2 mb-4">
             <Sparkles className="w-8 h-8 text-red-400" />
             <span className="text-2xl font-bold bg-gradient-to-r from-red-400 to-teal-400 bg-clip-text text-transparent">
               Focal Meet
             </span>
-          </Link>
+          </Link> */}
           {/* <h1 className="text-2xl font-semibold text-white mb-2"> */}
             {/* {isLogin ? 'Welcome Back' : 'Start Your AI Meeting Journey'} */}
           {/* </h1> */}
@@ -258,13 +271,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
                 isLogin ? 'Sign In' : 'Create Account'
               )}
             </button>
-            <button
-              type="button"
-              onClick={handleDemoSignIn}
-              className="w-full mt-3 py-3 px-4 bg-white/10 hover:bg-white/15 text-gray-200 font-semibold rounded-lg border border-white/20 transition-colors"
-            >
-              Enter Demo Mode (No Server)
-            </button>
           </form>
 
           {/* Switch mode */}
@@ -298,33 +304,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
           </p>
         </div>
 
-        {/* Demo Accounts Info */}
-        <div className="mt-6 p-4 bg-white/5 backdrop-blur-sm rounded-lg border border-white/10">
-          <h4 className="text-sm font-medium text-white mb-3 flex items-center">
-            <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-            Demo Accounts
-          </h4>
-          <div className="space-y-2 text-xs text-gray-300">
-            {demoAccounts.map((account, index) => (
-              <div 
-                key={index}
-                onClick={() => fillDemoAccount(account.email, account.password)}
-                className="flex justify-between items-center p-2 rounded hover:bg-white/5 cursor-pointer transition-colors group"
-              >
-                <div>
-                  <div className="text-gray-300 group-hover:text-white transition-colors">{account.email}</div>
-                  <div className="text-xs text-gray-500">{account.label}</div>
-                </div>
-                <span className="text-gray-400 group-hover:text-gray-300 transition-colors font-mono">
-                  {account.password}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-400 mt-3 italic">
-            Click any account info to quickly fill the form
-          </p>
-        </div>
       </div>
     </div>
   );

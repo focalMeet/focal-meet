@@ -1,4 +1,5 @@
 import { getToken, clearToken } from './auth';
+import { sha256Hex } from './crypto';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -19,10 +20,24 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   };
 
   const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    console.log(`[API] Request to ${path} with token:`, token.substring(0, 20) + '...');
+  } else {
+    console.log(`[API] Request to ${path} without token`);
+  }
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  console.log(`[API] Response status: ${res.status} for ${path}`);
+  if (res.status === 307 || res.status === 308) {
+    console.log(`[API] Redirect detected for ${path}, Location:`, res.headers.get('Location'));
+  }
   if (res.status === 401) {
+    console.log(`[API] 401 Unauthorized for ${path}, clearing token`);
+    clearToken();
+  }
+  if (res.status === 403) {
+    console.log(`[API] 403 Forbidden for ${path}, clearing token (permission error)`);
     clearToken();
   }
   const contentType = res.headers.get('content-type') || '';
@@ -49,7 +64,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
 // Auth
 export async function login(username: string, password: string): Promise<{ access_token: string; token_type: string }>{
-  const body = new URLSearchParams({ username, password });
+  const passwordHashed = await sha256Hex(password);
+  const body = new URLSearchParams({ username, password: passwordHashed });
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -60,19 +76,29 @@ export async function login(username: string, password: string): Promise<{ acces
   return json;
 }
 
+export async function register(payload: { email: string; password: string; invitation_token?: string | null }): Promise<{ id: string; email: string }> {
+  const passwordHashed = await sha256Hex(payload.password);
+  const body = { ...payload, password: passwordHashed };
+  return apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(body) });
+}
+
 export async function me(): Promise<{ id: string; email: string }>{
   return apiFetch('/auth/users/me');
+}
+
+export async function logout(): Promise<{ success: boolean }>{
+  return apiFetch('/auth/logout', { method: 'POST' });
 }
 
 // Sessions
 export type SessionItem = { id: string; title: string; status: string; created_at: string; updated_at: string };
 export async function listSessions(): Promise<SessionItem[]> {
-  return apiFetch('/sessions');
+  return apiFetch('/sessions/');
 }
 
 export type SessionCreated = { sessionId: string; noteId: string; transcriptId: string };
 export async function createSession(): Promise<SessionCreated> {
-  return apiFetch('/sessions', { method: 'POST' });
+  return apiFetch('/sessions/', { method: 'POST' });
 }
 
 export async function getSession(sessionId: string): Promise<SessionItem> {
@@ -85,6 +111,11 @@ export async function getPublicSession(sessionId: string): Promise<SessionItem> 
 
 export async function uploadSessionAudio(sessionId: string, file: File): Promise<{ audioSourceId: string }>{
   const token = getToken();
+  if (token) {
+    console.log(`[API] Upload audio with token:`, token.substring(0, 20) + '...');
+  } else {
+    console.log(`[API] Upload audio without token`);
+  }
   const form = new FormData();
   form.append('file', file);
   const res = await fetch(`${API_BASE}/sessions/${sessionId}/audio/upload`, {
@@ -141,7 +172,7 @@ export async function getTask(taskId: string): Promise<TaskStatus>{
 export type TemplateRead = { id: string; name: string; prompt: string; is_system_template: boolean; user_id?: string | null };
 export async function listTemplates(): Promise<TemplateRead[]>{
   try {
-    return await apiFetch('/templates');
+    return await apiFetch('/templates/');
   } catch (err) {
     // Fallback mock data for early UI development
     const mock: TemplateRead[] = [
@@ -176,7 +207,7 @@ export async function listTemplates(): Promise<TemplateRead[]>{
   }
 }
 export async function createTemplate(payload: { name: string; prompt: string }): Promise<TemplateRead>{
-  return apiFetch('/templates', { method: 'POST', body: JSON.stringify(payload) });
+  return apiFetch('/templates/', { method: 'POST', body: JSON.stringify(payload) });
 }
 export async function updateTemplate(templateId: string, payload: { name?: string; prompt?: string }): Promise<TemplateRead>{
   return apiFetch(`/templates/${templateId}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -204,7 +235,7 @@ export async function getUsageDaily(params?: { start_date?: string; end_date?: s
 
 // Invitations
 export async function createInvitation(): Promise<{ invitationUrl: string; token: string }>{
-  return apiFetch('/invitations', { method: 'POST' });
+  return apiFetch('/invitations/', { method: 'POST' });
 }
 
 export type InvitationUse = { used_by_user_id: string; used_at: string };

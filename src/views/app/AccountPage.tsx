@@ -147,7 +147,8 @@ const Billing: React.FC = () => {
   );
 };
 
-import { createInvitation, listMyInvitations, InvitationRead } from '../../lib/api';
+import { createInvitation, listMyInvitations, InvitationRead, logout } from '../../lib/api';
+import { clearToken } from '../../lib/auth';
 
 const Invitations: React.FC = () => {
   const [items, setItems] = React.useState<InvitationRead[]>([]);
@@ -260,6 +261,20 @@ const AccountPage: React.FC = () => {
           <div className="p-4 rounded-xl border border-white/10 bg-black/20 sticky top-4">
             <div className="mb-3 text-xs uppercase tracking-wider text-gray-400">Account</div>
             <SideNav />
+            <div className="mt-6">
+              <button
+                onClick={async () => {
+                  try {
+                    await logout();
+                  } catch {}
+                  clearToken();
+                  navigate('/app/login');
+                }}
+                className="w-full mt-2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-gray-200 text-sm"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
         <div className="md:col-span-3">

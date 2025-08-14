@@ -25,7 +25,16 @@ const TemplatesPage: React.FC = () => {
       const data = await apiListTemplates();
       setTemplates(data);
     } catch (e: any) {
-      setTemplatesError(e?.message || 'Failed to load templates');
+      // 提供更友好的错误信息
+      let errorMessage = 'Failed to load templates';
+      if (e?.status === 403) {
+        errorMessage = '权限不足，请重新登录';
+      } else if (e?.status === 401) {
+        errorMessage = '登录已过期，请重新登录';
+      } else if (e?.message) {
+        errorMessage = e.message;
+      }
+      setTemplatesError(errorMessage);
     } finally {
       setTemplatesLoading(false);
     }
@@ -36,7 +45,7 @@ const TemplatesPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-red-500/10 to-orange-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 rounded-full blur-3xl"></div>

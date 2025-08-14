@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { listSessions, SessionItem } from '../lib/api';
+import { isAuthenticated } from '../lib/auth';
 import { useNavigate } from 'react-router-dom';
 
 interface DashboardProps {}
@@ -35,13 +36,26 @@ const Dashboard: React.FC<DashboardProps> = () => {
       const data = await listSessions();
       setMeetings(data);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load sessions');
+      // 提供更友好的错误信息
+      let errorMessage = 'Failed to load sessions';
+      if (e?.status === 403) {
+        errorMessage = '权限不足，请重新登录';
+      } else if (e?.status === 401) {
+        errorMessage = '登录已过期，请重新登录';
+      } else if (e?.message) {
+        errorMessage = e.message;
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!isAuthenticated()) {
+      navigate('/app/login');
+      return;
+    }
     fetchSessions();
   }, []);
 
@@ -84,13 +98,13 @@ const Dashboard: React.FC<DashboardProps> = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="relative">
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-red-500/10 to-orange-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      <main className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">Welcome Back, Start Your AI Meeting Journey</h2>
@@ -266,7 +280,7 @@ const Dashboard: React.FC<DashboardProps> = () => {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 };
