@@ -4,9 +4,16 @@ import { NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-
 type UsageSummary = {
   periodStart: string;
   periodEnd: string;
-  maxAudioMinutesPerMonth: number;
-  usedAudioMinutes: number;
-  remainingAudioMinutes: number;
+  maxSessionsPerMonth: number;
+  usedSessionsThisMonth: number;
+  remainingSessionsThisMonth: number;
+  maxSessionDurationMinutes: number;
+  maxConcurrentSessions: number;
+  currentRunningSessions: number;
+  maxConcurrentTasks: number;
+  currentRunningTasks: number;
+  maxAiTasksPerMonth: number;
+  copilotEnabled: boolean;
 };
 
 type DailyUsage = { date: string; usage_seconds: number };
@@ -14,9 +21,16 @@ type DailyUsage = { date: string; usage_seconds: number };
 const mockUsageSummary: UsageSummary = {
   periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
   periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString(),
-  maxAudioMinutesPerMonth: 300,
-  usedAudioMinutes: 124,
-  remainingAudioMinutes: 176,
+  maxSessionsPerMonth: 20,
+  usedSessionsThisMonth: 8,
+  remainingSessionsThisMonth: 12,
+  maxSessionDurationMinutes: 60,
+  maxConcurrentSessions: 3,
+  currentRunningSessions: 1,
+  maxConcurrentTasks: 3,
+  currentRunningTasks: 0,
+  maxAiTasksPerMonth: 100,
+  copilotEnabled: true,
 };
 
 const mockDaily: DailyUsage[] = Array.from({ length: 14 }).map((_, i) => {
@@ -51,14 +65,31 @@ const Overview: React.FC = () => {
         <div className="p-4 rounded-xl border border-white/10 bg-white/5">
           <div className="text-sm text-gray-400">Plan</div>
           <div className="text-xl font-semibold mt-1">Pro (Mock)</div>
+          <div className="mt-2 text-xs text-gray-400">Copilot: <span className={mockUsageSummary.copilotEnabled ? 'text-green-400' : 'text-gray-400'}>{mockUsageSummary.copilotEnabled ? 'Enabled' : 'Disabled'}</span></div>
         </div>
         <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-          <div className="text-sm text-gray-400">Monthly Quota</div>
-          <div className="text-xl font-semibold mt-1">{mockUsageSummary.maxAudioMinutesPerMonth} mins</div>
+          <div className="text-sm text-gray-400">Monthly Session Quota</div>
+          <div className="text-xl font-semibold mt-1">{mockUsageSummary.maxSessionsPerMonth} sessions</div>
         </div>
         <div className="p-4 rounded-xl border border-white/10 bg-white/5">
           <div className="text-sm text-gray-400">Used this cycle</div>
-          <div className="text-xl font-semibold mt-1">{mockUsageSummary.usedAudioMinutes} mins</div>
+          <div className="text-xl font-semibold mt-1">{mockUsageSummary.usedSessionsThisMonth} sessions</div>
+        </div>
+        <div className="p-4 rounded-xl border border-white/10 bg-white/5 md:col-span-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <div className="text-sm text-gray-400">Concurrent Sessions</div>
+              <div className="text-xl font-semibold mt-1">{mockUsageSummary.currentRunningSessions} / {mockUsageSummary.maxConcurrentSessions}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">Concurrent Tasks</div>
+              <div className="text-xl font-semibold mt-1">{mockUsageSummary.currentRunningTasks} / {mockUsageSummary.maxConcurrentTasks}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">AI Tasks Monthly Quota</div>
+              <div className="text-xl font-semibold mt-1">{mockUsageSummary.maxAiTasksPerMonth} tasks</div>
+            </div>
+          </div>
         </div>
       </div>
       <div className="p-4 rounded-xl border border-white/10 bg-white/5">
@@ -67,10 +98,10 @@ const Overview: React.FC = () => {
             <div className="text-sm text-gray-400">Cycle</div>
             <div className="text-sm">{new Date(mockUsageSummary.periodStart).toLocaleDateString()} - {new Date(mockUsageSummary.periodEnd).toLocaleDateString()}</div>
           </div>
-          <div className="text-sm text-gray-400">Remaining: <span className="text-white font-medium">{mockUsageSummary.remainingAudioMinutes} mins</span></div>
+          <div className="text-sm text-gray-400">Remaining: <span className="text-white font-medium">{mockUsageSummary.remainingSessionsThisMonth} sessions</span></div>
         </div>
         <div className="mt-3 h-3 w-full bg-white/10 rounded">
-          <div className="h-3 bg-gradient-to-r from-red-500 to-orange-500 rounded" style={{ width: `${Math.min(100, Math.round(100 * mockUsageSummary.usedAudioMinutes / Math.max(1, mockUsageSummary.maxAudioMinutesPerMonth)))}%` }} />
+          <div className="h-3 bg-gradient-to-r from-red-500 to-orange-500 rounded" style={{ width: `${Math.min(100, Math.round(100 * mockUsageSummary.usedSessionsThisMonth / Math.max(1, mockUsageSummary.maxSessionsPerMonth)))}%` }} />
         </div>
       </div>
     </div>
@@ -83,8 +114,9 @@ const Usage: React.FC = () => {
       <h2 className="text-lg font-semibold">Daily Usage (Mock)</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 rounded-xl border border-white/10 bg-white/5">
-          <div className="text-sm text-gray-400">Summary</div>
-          <div className="mt-2 text-sm">Used: {mockUsageSummary.usedAudioMinutes} mins / {mockUsageSummary.maxAudioMinutesPerMonth} mins</div>
+          <div className="text-sm text-gray-400">Concurrent Overview</div>
+          <div className="mt-2 text-sm">Sessions: {mockUsageSummary.currentRunningSessions} / {mockUsageSummary.maxConcurrentSessions}</div>
+          <div className="mt-1 text-sm">Tasks: {mockUsageSummary.currentRunningTasks} / {mockUsageSummary.maxConcurrentTasks}</div>
         </div>
         <div className="p-4 rounded-xl border border-white/10 bg-white/5">
           <div className="text-sm text-gray-400">Cycle</div>
@@ -249,6 +281,16 @@ const Invitations: React.FC = () => {
 const AccountPage: React.FC = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [showSignoutModal, setShowSignoutModal] = React.useState(false);
+
+  const confirmSignout = async () => {
+    try {
+      await logout();
+    } catch {}
+    clearToken();
+    setShowSignoutModal(false);
+    navigate('/app/login');
+  };
 
   React.useEffect(() => {
     if (pathname === '/app/account' || pathname === '/app/account/') return;
@@ -263,14 +305,8 @@ const AccountPage: React.FC = () => {
             <SideNav />
             <div className="mt-6">
               <button
-                onClick={async () => {
-                  try {
-                    await logout();
-                  } catch {}
-                  clearToken();
-                  navigate('/app/login');
-                }}
-                className="w-full mt-2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-gray-200 text-sm"
+                onClick={() => setShowSignoutModal(true)}
+                className="w-full mt-2 px-3 py-2 rounded-md text-gray-200 text-sm bg-white/10 hover:bg-red-600 hover:text-white transition-colors border border-transparent hover:border-red-500"
               >
                 Sign out
               </button>
@@ -289,6 +325,29 @@ const AccountPage: React.FC = () => {
             <Outlet />
           </div>
         </div>
+        {showSignoutModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setShowSignoutModal(false)} />
+            <div className="relative z-10 w-full max-w-sm rounded-xl border border-white/10 bg-gray-900 p-5 shadow-xl">
+              <h3 className="text-lg font-semibold text-white">Sign out</h3>
+              <p className="mt-2 text-sm text-gray-400">Are you sure you want to sign out?</p>
+              <div className="mt-5 flex justify-end space-x-2">
+                <button
+                  onClick={() => setShowSignoutModal(false)}
+                  className="px-3 py-2 rounded-md bg-white/10 hover:bg-white/20 text-gray-200 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmSignout}
+                  className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

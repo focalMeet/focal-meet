@@ -92,7 +92,7 @@ const AppLayout: React.FC = () => {
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex flex-col">
-      <header role="banner" className="flex-none bg-black/20 backdrop-blur-lg border-b border-white/10">
+      <header role="banner" className="flex-none bg-black/20 backdrop-blur-lg border-b border-white/10" style={{ position: 'static' }}>
         <div className="mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center">
@@ -120,12 +120,12 @@ const AppLayout: React.FC = () => {
               >
                 Live
               </NavLink>
-              <NavLink
+              {/* <NavLink
                 to="/app/upload"
                 className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
               >
                 Upload
-              </NavLink>
+              </NavLink> */}
               <NavLink
                 to="/app/templates"
                 className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
@@ -136,13 +136,13 @@ const AppLayout: React.FC = () => {
                 to="/app/account"
                 className={({ isActive }) => `px-3 py-1.5 rounded-lg transition-colors ${isActive ? 'text-white bg-white/10' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
               >
-                Account
+                {loadingUser ? 'Loading...' : user ?.email}
               </NavLink>
-              {user && (
+              {/* {user && (
                 <Link to="/app/account" className="text-xs text-gray-300 hover:text-white underline/0 hover:underline">
                   {loadingUser ? 'Loading...' : user.email}
                 </Link>
-              )}
+              )} */}
               {/* {isAuthenticated() && (
                 <button
                   onClick={() => { clearToken(); navigate('/app/login'); }}

@@ -197,7 +197,7 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
   };
 
   return (
-    <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="h-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Background decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-red-500/10 to-orange-500/10 rounded-full blur-3xl"></div>

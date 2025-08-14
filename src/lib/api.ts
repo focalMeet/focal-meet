@@ -222,7 +222,20 @@ export async function submitFeedback(payload: { noteId: string; blockId?: string
 }
 
 // Users usage
-export async function getUsageSummary(): Promise<{ periodStart: string; periodEnd: string; maxAudioMinutesPerMonth: number; usedAudioMinutes: number; remainingAudioMinutes: number }>{
+export async function getUsageSummary(): Promise<{
+  periodStart: string;
+  periodEnd: string;
+  maxSessionsPerMonth: number;
+  usedSessionsThisMonth: number;
+  remainingSessionsThisMonth: number;
+  maxSessionDurationMinutes: number;
+  maxConcurrentSessions: number;
+  currentRunningSessions: number;
+  maxConcurrentTasks: number;
+  currentRunningTasks: number;
+  maxAiTasksPerMonth: number;
+  copilotEnabled: boolean;
+}>{
   return apiFetch('/users/me/usage/summary');
 }
 export async function getUsageDaily(params?: { start_date?: string; end_date?: string }): Promise<{ data: Array<{ date: string; usage_seconds: number }> }>{

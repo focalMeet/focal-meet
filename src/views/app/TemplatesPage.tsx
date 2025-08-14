@@ -2,17 +2,43 @@ import React from 'react';
 import { Plus, Edit3, Trash2 } from 'lucide-react';
 import { isAuthenticated } from '../../lib/auth';
 import { useNavigate } from 'react-router-dom';
-import { listTemplates as apiListTemplates, createTemplate as apiCreateTemplate, deleteTemplate as apiDeleteTemplate, TemplateRead } from '../../lib/api';
+import { listTemplates as apiListTemplates, deleteTemplate as apiDeleteTemplate, TemplateRead } from '../../lib/api';
 
 const TemplatesPage: React.FC = () => {
   const navigate = useNavigate();
   const [templates, setTemplates] = React.useState<TemplateRead[]>([]);
   const [templatesLoading, setTemplatesLoading] = React.useState(false);
   const [templatesError, setTemplatesError] = React.useState<string | null>(null);
-  const [savingTemplateId] = React.useState<string | null>(null);
-  const [creatingTemplate, setCreatingTemplate] = React.useState(false);
-  const [newTplName, setNewTplName] = React.useState('');
-  const [newTplPrompt, setNewTplPrompt] = React.useState('');
+  // creation states are not used in mock mode for now
+  const useMockTemplates = true;
+  const mockTemplates: TemplateRead[] = [
+    {
+      id: '11111111-1111-1111-1111-111111111111',
+      name: 'General Summary',
+      prompt: 'Summarize the meeting into concise bullet points, highlighting key decisions and next steps.',
+      is_system_template: true,
+    },
+    {
+      id: '22222222-2222-2222-2222-222222222222',
+      name: 'Action Items Extractor',
+      prompt: 'Extract clear action items with owners and due dates from the conversation.',
+      is_system_template: true,
+    },
+    {
+      id: '33333333-3333-3333-3333-333333333333',
+      name: 'Custom: Weekly Sync Focus',
+      prompt: 'Summarize our weekly sync focusing on blockers, progress, and priorities for next week.',
+      is_system_template: false,
+      user_id: 'mock-user-id',
+    },
+    {
+      id: '44444444-4444-4444-4444-444444444444',
+      name: 'Custom: Sales Call Notes',
+      prompt: 'Capture prospect pain points, objections, competitors, budget, and next steps from the sales call.',
+      is_system_template: false,
+      user_id: 'mock-user-id',
+    },
+  ];
 
   React.useEffect(() => {
     if (!isAuthenticated()) navigate('/app/login');
@@ -22,8 +48,12 @@ const TemplatesPage: React.FC = () => {
     setTemplatesLoading(true);
     setTemplatesError(null);
     try {
-      const data = await apiListTemplates();
-      setTemplates(data);
+      if (useMockTemplates) {
+        setTemplates(mockTemplates);
+      } else {
+        const data = await apiListTemplates();
+        setTemplates(data);
+      }
     } catch (e: any) {
       // 提供更友好的错误信息
       let errorMessage = 'Failed to load templates';
@@ -45,7 +75,7 @@ const TemplatesPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="h-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-red-500/10 to-orange-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 rounded-full blur-3xl"></div>
