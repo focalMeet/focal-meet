@@ -12,6 +12,7 @@ import NotFound from '../views/NotFound';
 import LoginPage from '../views/app/LoginPage';
 import DashboardPage from '../views/app/DashboardPage';
 import MeetingDetailPage from '../views/app/MeetingDetailPage';
+import LiveRecord from '../components/LiveRecord';
 
 const router = createBrowserRouter([
   {
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
       { path: 'login', element: <LoginPage /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'meetings/:id', element: <MeetingDetailPage /> },
+      { path: 'live', element: <LiveRecord /> },
     ],
   },
 ]);

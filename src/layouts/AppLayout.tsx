@@ -1,10 +1,33 @@
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { clearToken, isAuthenticated } from '../lib/auth';
+import { me } from '../lib/api';
 import logoMark from '../assets/logo-mark.svg';
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
-  const showHeader = location.pathname !== '/app/dashboard';
+  const navigate = useNavigate();
+  const showHeader = true;
+  const [user, setUser] = React.useState<{ id: string; email: string } | null>(null);
+  const [loadingUser, setLoadingUser] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!isAuthenticated()) { setUser(null); return; }
+      setLoadingUser(true);
+      try {
+        const u = await me();
+        if (!cancelled) setUser(u);
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoadingUser(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
@@ -18,8 +41,18 @@ const AppLayout: React.FC = () => {
                   Focal Meet
                 </span>
               </Link>
-              <nav className="hidden md:flex space-x-4 text-sm text-gray-300">
+              <nav className="hidden md:flex space-x-4 text-sm text-gray-300 items-center">
                 <Link to="/app/dashboard" className="hover:text-white">Dashboard</Link>
+                <Link to="/app/live" className="hover:text-white">Live</Link>
+                {user && (
+                  <span className="text-xs text-gray-400">{loadingUser ? 'Loading...' : user.email}</span>
+                )}
+                {isAuthenticated() && (
+                  <button
+                    onClick={() => { clearToken(); navigate('/app/login'); }}
+                    className="ml-4 px-3 py-1 rounded-md bg-white/10 hover:bg-white/20 text-gray-200"
+                  >Sign Out</button>
+                )}
               </nav>
             </div>
           </div>

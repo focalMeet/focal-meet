@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, Sparkles } from 'lucide-react';
+import { login } from '../lib/api';
+import { setToken } from '../lib/auth';
 
 interface AuthFormProps {
   onAuthSuccess?: () => void;
@@ -83,33 +85,17 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Demo accounts for testing
-      const demoAccounts = [
-        { email: 'demo@focalmeet.com', password: 'Demo123456' },
-        { email: 'admin@focalmeet.com', password: 'Admin123456' },
-        { email: 'user@focalmeet.com', password: 'User123456' },
-        { email: 'test@focalmeet.com', password: 'Test123456' }
-      ];
-
-      if (isLogin) {
-        // Check demo accounts for login
-        const validAccount = demoAccounts.find(
-          account => account.email === formData.email && account.password === formData.password
-        );
-        
-        if (validAccount) {
-          console.log('Login successful with demo account:', formData.email);
+      try {
+        if (isLogin) {
+          const resp = await login(formData.email, formData.password);
+          setToken(resp.access_token);
           onAuthSuccess?.();
         } else {
-          setErrors({ email: 'Invalid email or password. Please use demo accounts for testing.' });
+          // 简化：注册后直接跳转登录页逻辑交给上层，这里暂不实现注册API
+          onAuthSuccess?.();
         }
-      } else {
-        // For registration, just simulate success
-        console.log('Registration successful:', formData.email);
-        onAuthSuccess?.();
+      } catch (e: any) {
+        setErrors({ email: 'Login failed. Please check your credentials.' });
       }
     }
 
@@ -124,6 +110,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
       confirmPassword: ''
     });
     setErrors({});
+  };
+
+  const handleDemoSignIn = () => {
+    // Fake login for frontend-only demo
+    setToken('demo');
+    onAuthSuccess?.();
   };
 
   const fillDemoAccount = (email: string, password: string) => {
@@ -265,6 +257,13 @@ const AuthForm: React.FC<AuthFormProps> = ({ onAuthSuccess }) => {
               ) : (
                 isLogin ? 'Sign In' : 'Create Account'
               )}
+            </button>
+            <button
+              type="button"
+              onClick={handleDemoSignIn}
+              className="w-full mt-3 py-3 px-4 bg-white/10 hover:bg-white/15 text-gray-200 font-semibold rounded-lg border border-white/20 transition-colors"
+            >
+              Enter Demo Mode (No Server)
             </button>
           </form>
 
