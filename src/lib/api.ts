@@ -1,0 +1,260 @@
+import { getToken, clearToken } from './auth';
+import { sha256Hex } from './crypto';
+
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init.headers as Record<string, string> | undefined),
+  };
+
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    console.log(`[API] Request to ${path} with token:`, token.substring(0, 20) + '...');
+  } else {
+    console.log(`[API] Request to ${path} without token`);
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  console.log(`[API] Response status: ${res.status} for ${path}`);
+  if (res.status === 307 || res.status === 308) {
+    console.log(`[API] Redirect detected for ${path}, Location:`, res.headers.get('Location'));
+  }
+  if (res.status === 401) {
+    console.log(`[API] 401 Unauthorized for ${path}, clearing token`);
+    clearToken();
+  }
+  if (res.status === 403) {
+    console.log(`[API] 403 Forbidden for ${path}, clearing token (permission error)`);
+    clearToken();
+  }
+  const contentType = res.headers.get('content-type') || '';
+  let data: any = null;
+  try {
+    if (contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      const text = await res.text();
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text || null;
+      }
+    }
+  } catch (e) {
+    data = null;
+  }
+  if (!res.ok) {
+    throw new ApiError(`Request failed: ${res.status}`, res.status, data);
+  }
+  return data as T;
+}
+
+// Auth
+export async function login(username: string, password: string): Promise<{ access_token: string; token_type: string }>{
+  const passwordHashed = await sha256Hex(password);
+  const body = new URLSearchParams({ username, password: passwordHashed });
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new ApiError('Login failed', res.status, json);
+  return json;
+}
+
+export async function register(payload: { email: string; password: string; invitation_token?: string | null }): Promise<{ id: string; email: string }> {
+  const passwordHashed = await sha256Hex(payload.password);
+  const body = { ...payload, password: passwordHashed };
+  return apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function me(): Promise<{ id: string; email: string }>{
+  return apiFetch('/auth/users/me');
+}
+
+export async function logout(): Promise<{ success: boolean }>{
+  return apiFetch('/auth/logout', { method: 'POST' });
+}
+
+// Sessions
+export type SessionItem = { id: string; title: string; status: string; created_at: string; updated_at: string };
+export async function listSessions(): Promise<SessionItem[]> {
+  return apiFetch('/sessions/');
+}
+
+export type SessionCreated = { sessionId: string; noteId: string; transcriptId: string };
+export async function createSession(): Promise<SessionCreated> {
+  return apiFetch('/sessions/', { method: 'POST' });
+}
+
+export async function getSession(sessionId: string): Promise<SessionItem> {
+  return apiFetch(`/sessions/${sessionId}`);
+}
+
+export async function getPublicSession(sessionId: string): Promise<SessionItem> {
+  return apiFetch(`/sessions/public/${sessionId}`);
+}
+
+export async function uploadSessionAudio(sessionId: string, file: File): Promise<{ audioSourceId: string }>{
+  const token = getToken();
+  if (token) {
+    console.log(`[API] Upload audio with token:`, token.substring(0, 20) + '...');
+  } else {
+    console.log(`[API] Upload audio without token`);
+  }
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/audio/upload`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new ApiError('Upload failed', res.status, json);
+  return json;
+}
+
+export async function shareSession(sessionId: string): Promise<{ shareUrl: string; isPublic: boolean }>{
+  return apiFetch(`/sessions/${sessionId}/share`, { method: 'POST' });
+}
+
+export async function uploadSessionAudioFromUrl(sessionId: string, url: string): Promise<{ audioSourceId: string }>{
+  return apiFetch(`/sessions/${sessionId}/audio/from-url`, { method: 'POST', body: JSON.stringify({ url }) });
+}
+
+// Notes
+export type NoteRead = { id: string; session_id: string; user_id: string; title: string; content?: Record<string, unknown> | null; created_at: string; updated_at: string };
+export async function listNotes(): Promise<NoteRead[]>{
+  return apiFetch('/notes');
+}
+export async function getNote(noteId: string): Promise<NoteRead>{
+  return apiFetch(`/notes/${noteId}`);
+}
+export async function createNote(payload: { sessionId: string; title?: string }): Promise<NoteRead>{
+  return apiFetch('/notes', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateNote(noteId: string, payload: { title?: string; content?: Record<string, unknown> | null }): Promise<NoteRead>{
+  return apiFetch(`/notes/${noteId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteNote(noteId: string): Promise<void>{
+  await apiFetch(`/notes/${noteId}`, { method: 'DELETE' });
+}
+export async function enrichNote(payload: { sessionId: string; templateId?: string | null }): Promise<{ taskId: string }>{
+  return apiFetch('/notes/enrich', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function generateNote(payload: { sessionId: string; templateId?: string | null }): Promise<{ taskId: string }>{
+  return apiFetch('/notes/generate', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Tasks
+export type TaskStatus = { taskId: string; status: string; result_content?: Record<string, unknown> | null };
+export async function getTask(taskId: string): Promise<TaskStatus>{
+  return apiFetch(`/tasks/${taskId}`);
+}
+
+// Templates
+export type TemplateRead = { id: string; name: string; prompt: string; is_system_template: boolean; user_id?: string | null };
+export async function listTemplates(): Promise<TemplateRead[]>{
+  try {
+    return await apiFetch('/templates/');
+  } catch (err) {
+    // Fallback mock data for early UI development
+    const mock: TemplateRead[] = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        name: 'General Summary',
+        prompt: 'Summarize the meeting into concise bullet points, highlighting key decisions and next steps.',
+        is_system_template: true,
+      },
+      {
+        id: '22222222-2222-2222-2222-222222222222',
+        name: 'Action Items Extractor',
+        prompt: 'Extract clear action items with owners and due dates from the conversation.',
+        is_system_template: true,
+      },
+      {
+        id: '33333333-3333-3333-3333-333333333333',
+        name: 'Custom: Weekly Sync Focus',
+        prompt: 'Summarize our weekly sync focusing on blockers, progress, and priorities for next week.',
+        is_system_template: false,
+        user_id: 'mock-user-id',
+      },
+      {
+        id: '44444444-4444-4444-4444-444444444444',
+        name: 'Custom: Sales Call Notes',
+        prompt: 'Capture prospect pain points, objections, competitors, budget, and next steps from the sales call.',
+        is_system_template: false,
+        user_id: 'mock-user-id',
+      },
+    ];
+    return mock;
+  }
+}
+export async function createTemplate(payload: { name: string; prompt: string }): Promise<TemplateRead>{
+  return apiFetch('/templates/', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateTemplate(templateId: string, payload: { name?: string; prompt?: string }): Promise<TemplateRead>{
+  return apiFetch(`/templates/${templateId}`, { method: 'PUT', body: JSON.stringify(payload) });
+}
+export async function deleteTemplate(templateId: string): Promise<void>{
+  await apiFetch(`/templates/${templateId}`, { method: 'DELETE' });
+}
+
+// Feedback
+export async function submitFeedback(payload: { noteId: string; blockId?: string; originalText?: string; correctedText?: string; feedbackType: string }): Promise<{ feedbackId: string; traceId?: string; scored: boolean }>{
+  return apiFetch('/feedback', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Users usage
+export async function getUsageSummary(): Promise<{
+  periodStart: string;
+  periodEnd: string;
+  maxSessionsPerMonth: number;
+  usedSessionsThisMonth: number;
+  remainingSessionsThisMonth: number;
+  maxSessionDurationMinutes: number;
+  maxConcurrentSessions: number;
+  currentRunningSessions: number;
+  maxConcurrentTasks: number;
+  currentRunningTasks: number;
+  maxAiTasksPerMonth: number;
+  copilotEnabled: boolean;
+}>{
+  return apiFetch('/users/me/usage/summary');
+}
+export async function getUsageDaily(params?: { start_date?: string; end_date?: string }): Promise<{ data: Array<{ date: string; usage_seconds: number }> }>{
+  const usp = new URLSearchParams();
+  if (params?.start_date) usp.set('start_date', params.start_date);
+  if (params?.end_date) usp.set('end_date', params.end_date);
+  const qs = usp.toString();
+  return apiFetch(`/users/me/usage/daily${qs ? `?${qs}` : ''}`);
+}
+
+// Invitations
+export async function createInvitation(): Promise<{ invitationUrl: string; token: string }>{
+  return apiFetch('/invitations/', { method: 'POST' });
+}
+
+export type InvitationUse = { used_by_user_id: string; used_at: string };
+export type InvitationRead = { id: string; token: string; created_at: string | null; max_uses: number; used_count: number; remaining_uses: number; uses: InvitationUse[] };
+export async function listMyInvitations(): Promise<{ data: InvitationRead[] }> {
+  return apiFetch('/invitations/mine');
+}
+
+

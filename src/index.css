@@ -1,3 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* TipTap placeholder style */
+.ProseMirror p.is-editor-empty:first-child::before,
+.ProseMirror div.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgb(156 163 175 / 0.7); /* text-gray-400 */
+  pointer-events: none;
+  height: 0;
+}
+
+/* Transparent scrollbar track + subtle thumb for dark UI */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.28);
+  border-radius: 9999px;
+  border: 2px solid transparent; /* creates padding so thumb不显得太粗 */
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.38);
+}

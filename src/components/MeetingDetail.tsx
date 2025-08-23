@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Download, 
@@ -14,6 +14,7 @@ import {
   CheckSquare,
   MessageSquare
 } from 'lucide-react';
+import { getPublicSession, getSession, SessionItem, enrichNote, generateNote, getTask, shareSession, listNotes, NoteRead } from '../lib/api';
 
 interface MeetingDetailProps {
   meetingId: string;
@@ -25,8 +26,13 @@ const MeetingDetail: React.FC<MeetingDetailProps> = ({ meetingId, onBack }) => {
   const [manualNotes, setManualNotes] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [session, setSession] = useState<SessionItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<NoteRead | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
 
-  // Mock data
+  // Mock data (summary/actions/transcript) for now; session header will be live
   const meetingData = {
     title: 'Product Planning Meeting',
     date: '2024-01-15',
@@ -86,6 +92,45 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
 [00:05:30] John Smith: Excellent, let's determine specific timeline and responsible persons...`
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const s = await getSession(meetingId);
+        if (!cancelled) setSession(s);
+      } catch (e) {
+        try {
+          const ps = await getPublicSession(meetingId);
+          if (!cancelled) setSession(ps);
+        } catch (err: any) {
+          if (!cancelled) setError(err?.message || 'Failed to load session');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    if (meetingId) load();
+    return () => { cancelled = true; };
+  }, [meetingId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadNote = async () => {
+      if (!session) return;
+      try {
+        const notes = await listNotes();
+        const found = notes.find(n => n.session_id === session.id);
+        if (!cancelled) setNote(found || null);
+      } catch {
+        if (!cancelled) setNote(null);
+      }
+    };
+    loadNote();
+    return () => { cancelled = true; };
+  }, [session]);
+
   const templates = [
     { id: '', name: 'Select Template' },
     { id: '1', name: 'Interview Template' },
@@ -95,17 +140,42 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
 
   const handleRegenerateWithNotes = async () => {
     setIsRegenerating(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsRegenerating(false);
+    try {
+      if (!session) return;
+      const { taskId } = await enrichNote({ sessionId: session.id });
+      // Simple polling
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        const t = await getTask(taskId);
+        if (t.status === 'completed' || t.status === 'failed') break;
+      }
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   const handleApplyTemplate = async () => {
     if (!selectedTemplate) return;
     setIsRegenerating(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsRegenerating(false);
+    try {
+      if (!session) return;
+      const { taskId } = await generateNote({ sessionId: session.id, templateId: selectedTemplate });
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        const t = await getTask(taskId);
+        if (t.status === 'completed' || t.status === 'failed') break;
+      }
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      if (!session) return;
+      const res = await shareSession(session.id);
+      setShareUrl(res.shareUrl);
+    } catch {}
   };
 
   const getPriorityColor = (priority: string) => {
@@ -127,58 +197,56 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="h-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-red-500/10 to-orange-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Header */}
-      <div className="relative bg-black/20 backdrop-blur-lg border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <button
-                onClick={onBack}
-                className="mr-4 p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-xl font-semibold text-white">{meetingData.title}</h1>
-                <div className="flex items-center space-x-4 text-sm text-gray-400">
-                  <span className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    {meetingData.date}
-                  </span>
-                  <span className="flex items-center">
-                    <Clock className="w-4 h-4 mr-1" />
-                    {meetingData.duration}
-                  </span>
-                  <span className="flex items-center">
-                    <Users className="w-4 h-4 mr-1" />
-                    {meetingData.participants.length} participants
-                  </span>
-                </div>
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Page-level heading and actions (moved from internal header) */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center">
+            <button
+              onClick={onBack}
+              className="mr-4 p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-xl font-semibold text-white">{session?.title || 'Meeting'}</h1>
+              <div className="flex items-center space-x-4 text-sm text-gray-400">
+                <span className="flex items-center">
+                  <Calendar className="w-4 h-4 mr-1" />
+                  {session ? new Date(session.created_at).toLocaleString() : '—'}
+                </span>
+                <span className="flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  {session ? `Updated ${new Date(session.updated_at).toLocaleString()}` : '—'}
+                </span>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </button>
-              <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
-                <Share2 className="w-4 h-4 mr-2" />
-                Share
-              </button>
-            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </button>
+            <button className="flex items-center px-3 py-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-white/5" onClick={handleShare}>
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loading && (
+          <div className="text-center text-gray-400 py-12">Loading...</div>
+        )}
+        {error && !loading && (
+          <div className="text-center text-red-400 py-12">{error}</div>
+        )}
+        {!loading && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-3 space-y-6">
@@ -257,7 +325,7 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
                     </div>
                     <div className="prose max-w-none">
                       <div className="whitespace-pre-line text-gray-300 leading-relaxed">
-                        {meetingData.summary}
+                        {note?.content?.generated as any || meetingData.summary}
                       </div>
                     </div>
                   </div>
@@ -296,7 +364,7 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-white">Full Transcript</h3>
                     <div className="bg-white/5 rounded-lg p-4 font-mono text-sm leading-relaxed whitespace-pre-line text-gray-300 border border-white/10">
-                      {meetingData.transcript}
+                      {(note?.content?.transcript as any) || meetingData.transcript}
                     </div>
                   </div>
                 )}
@@ -344,25 +412,27 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
                 <div>
                   <label className="text-sm font-medium text-gray-400">Participants</label>
                   <div className="mt-1">
-                    {meetingData.participants.map((participant, index) => (
-                      <span key={index} className="inline-block bg-white/10 text-gray-300 text-xs px-2 py-1 rounded-full mr-2 mb-1 border border-white/20">
-                        {participant}
-                      </span>
-                    ))}
+                    {(note?.content?.participants as any as string[] | undefined)?.map((p, i) => (
+                      <span key={i} className="inline-block bg-white/10 text-gray-300 text-xs px-2 py-1 rounded-full mr-2 mb-1 border border-white/20">{p}</span>
+                    )) || null}
                   </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-400">Duration</label>
-                  <p className="text-sm text-white">{meetingData.duration}</p>
+                  <p className="text-sm text-white">{(note?.content as any)?.duration || '—'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-400">Created</label>
-                  <p className="text-sm text-white">{meetingData.date}</p>
+                  <p className="text-sm text-white">{session ? new Date(session.created_at).toLocaleString() : '—'}</p>
                 </div>
+                {shareUrl && (
+                  <div className="text-xs text-gray-400 break-all">Share URL: {shareUrl}</div>
+                )}
               </div>
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
