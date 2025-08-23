@@ -246,6 +246,337 @@ export async function getUsageDaily(params?: { start_date?: string; end_date?: s
   return apiFetch(`/users/me/usage/daily${qs ? `?${qs}` : ''}`);
 }
 
+// Enhanced Sessions Management
+export type SessionEnhanced = {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  generation_type: string | null;
+  enrichment_status: string;
+  enrichment_completed_at: string | null;
+  template_id: string | null;
+  language: string;
+  has_transcript: boolean;
+  has_user_notes: boolean;
+  sections_count: number;
+  final_markdown_preview: string | null;
+  audio_source_type: string | null;
+  audio_duration: number | null;
+};
+
+export type SessionsListResponse = {
+  sessions: SessionEnhanced[];
+  total_count: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+  statistics: {
+    total_sessions: number;
+    enriched_sessions: number;
+    pending_sessions: number;
+    failed_sessions: number;
+  };
+};
+
+export type SessionSearchRequest = {
+  query?: string;
+  status?: string[];
+  enrichment_status?: string[];
+  generation_type?: string;
+  date_from?: string;
+  date_to?: string;
+  has_transcript?: boolean;
+  has_user_notes?: boolean;
+  page?: number;
+  page_size?: number;
+};
+
+export async function getEnhancedSessions(params?: {
+  page?: number;
+  page_size?: number;
+  status_filter?: string;
+  enrichment_status?: string;
+}): Promise<SessionsListResponse> {
+  const usp = new URLSearchParams();
+  if (params?.page) usp.set('page', params.page.toString());
+  if (params?.page_size) usp.set('page_size', params.page_size.toString());
+  if (params?.status_filter) usp.set('status_filter', params.status_filter);
+  if (params?.enrichment_status) usp.set('enrichment_status', params.enrichment_status);
+  const qs = usp.toString();
+  return apiFetch(`/sessions/enhanced${qs ? `?${qs}` : ''}`);
+}
+
+export async function searchSessions(searchRequest: SessionSearchRequest): Promise<SessionsListResponse> {
+  return apiFetch('/sessions/search', { 
+    method: 'POST', 
+    body: JSON.stringify(searchRequest) 
+  });
+}
+
+export async function getSessionStatistics(): Promise<{
+  basic: { total_sessions: number; enriched_sessions: number; pending_sessions: number; failed_sessions: number };
+  monthly: Array<{ month: string; count: number }>;
+  generation_types: { [key: string]: number };
+  audio_sources: { [key: string]: number };
+  generated_at: string;
+}> {
+  return apiFetch('/sessions/statistics');
+}
+
+export async function getSessionSections(sessionId: string): Promise<{
+  session_id: string;
+  session_title: string;
+  session_status: string;
+  enrichment_status: string;
+  generation_type: string | null;
+  sections: Array<{
+    id: string;
+    title_text: string;
+    title_level: number;
+    section_order: number;
+    points: any;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+  total_sections: number;
+  enrichment_completed_at: string | null;
+}> {
+  return apiFetch(`/sessions/${sessionId}/sections`);
+}
+
+export async function getEnhancedSession(sessionId: string): Promise<SessionEnhanced> {
+  return apiFetch(`/sessions/${sessionId}/enhanced`);
+}
+
+export async function regenerateSmartNotes(
+  sessionId: string, 
+  generationType: 'enrich' | 'generate',
+  templateId?: string
+): Promise<{
+  enrichment_id: string;
+  session_id: string;
+  generation_type: string;
+  status: string;
+  message: string;
+}> {
+  const usp = new URLSearchParams();
+  usp.set('generation_type', generationType);
+  if (templateId) usp.set('template_id', templateId);
+  return apiFetch(`/sessions/${sessionId}/regenerate?${usp.toString()}`, { method: 'POST' });
+}
+
+// Smart Notes Generation
+export type SmartNotesRequest = {
+  template_id?: string;
+  options?: {
+    include_evidence?: boolean;
+    language?: string;
+    generate_summary?: boolean;
+  };
+};
+
+export type EnrichmentResponse = {
+  enrichment_id: string;
+  generation_type: string;
+  status: string;
+  estimated_time?: number;
+};
+
+export type EnrichmentStatusResponse = {
+  id: string;
+  generation_type: string;
+  status: string;
+  progress?: number;
+  processing_time?: number;
+  created_sections_count?: number;
+  final_markdown_preview?: string;
+  error_message?: string;
+};
+
+export type SmartNotesResponse = {
+  session_id: string;
+  generation_type: string;
+  template_id?: string;
+  language: string;
+  sections: any[];
+  notes_alignment: any[];
+  final_markdown: string;
+  enrichment_completed_at?: string;
+};
+
+export async function startEnrichProcess(
+  sessionId: string, 
+  request: SmartNotesRequest
+): Promise<EnrichmentResponse> {
+  return apiFetch(`/sessions/${sessionId}/enrich`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function startGenerateProcess(
+  sessionId: string, 
+  request: SmartNotesRequest
+): Promise<EnrichmentResponse> {
+  return apiFetch(`/sessions/${sessionId}/generate`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  });
+}
+
+export async function getEnrichmentStatus(
+  sessionId: string, 
+  enrichmentId: string
+): Promise<EnrichmentStatusResponse> {
+  return apiFetch(`/sessions/${sessionId}/enrichments/${enrichmentId}`);
+}
+
+export async function getSmartNotes(sessionId: string): Promise<SmartNotesResponse> {
+  return apiFetch(`/sessions/${sessionId}/smart-notes`);
+}
+
+export async function getDifyStatus(): Promise<{
+  dify_configured: boolean;
+  enrich_available: boolean;
+  generate_available: boolean;
+  api_key_configured: boolean;
+}> {
+  return apiFetch('/sessions/config/dify-status');
+}
+
+// Smart Mode Recommendation
+export type ModeRecommendation = {
+  recommended_mode: string | null;
+  confidence: number;
+  reasoning: string[];
+  both_available: boolean;
+  mode_comparison: {
+    enrich: { score: number; pros: string[]; cons: string[] };
+    generate: { score: number; pros: string[]; cons: string[] };
+  };
+  user_notes_analysis: any;
+  transcript_analysis: any;
+};
+
+export type ModeComparison = {
+  session_id: string;
+  both_modes_available: boolean;
+  recommended_mode: string | null;
+  confidence: number;
+  reasoning: string[];
+  detailed_comparison: any;
+  capabilities: {
+    enrich: {
+      description: string;
+      best_for: string[];
+      features: string[];
+    };
+    generate: {
+      description: string;
+      best_for: string[];
+      features: string[];
+    };
+  };
+};
+
+export async function getRecommendedMode(sessionId: string): Promise<ModeRecommendation> {
+  return apiFetch(`/sessions/${sessionId}/recommend-mode`);
+}
+
+export async function getModeComparison(sessionId: string): Promise<ModeComparison> {
+  return apiFetch(`/sessions/${sessionId}/mode-comparison`);
+}
+
+// Live Meeting WebSocket (helper for managing connection)
+export class LiveMeetingConnection {
+  private ws: WebSocket | null = null;
+  private sessionId: string;
+  private token: string;
+  private listeners: { [key: string]: ((data: any) => void)[] } = {};
+
+  constructor(sessionId: string, token: string) {
+    this.sessionId = sessionId;
+    this.token = token;
+  }
+
+  connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const wsUrl = `${API_BASE.replace('http', 'ws')}/live/meetings/${this.sessionId}/stream?token=${this.token}`;
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('[WebSocket] Connected to live meeting');
+        resolve();
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          this.emit(message.type, message.data);
+        } catch (e) {
+          console.error('[WebSocket] Failed to parse message:', e);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('[WebSocket] Connection error:', error);
+        reject(error);
+      };
+
+      this.ws.onclose = () => {
+        console.log('[WebSocket] Connection closed');
+        this.emit('disconnected', {});
+      };
+    });
+  }
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  sendMessage(type: string, data: any = {}) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type, data }));
+    }
+  }
+
+  startRecording(audioConfig?: any) {
+    this.sendMessage('start_recording', { audio_config: audioConfig });
+  }
+
+  stopRecording() {
+    this.sendMessage('stop_recording');
+  }
+
+  sendAudioChunk(audioData: string) {
+    this.sendMessage('audio_chunk', { audio_data: audioData });
+  }
+
+  on(eventType: string, callback: (data: any) => void) {
+    if (!this.listeners[eventType]) {
+      this.listeners[eventType] = [];
+    }
+    this.listeners[eventType].push(callback);
+  }
+
+  off(eventType: string, callback: (data: any) => void) {
+    if (this.listeners[eventType]) {
+      this.listeners[eventType] = this.listeners[eventType].filter(cb => cb !== callback);
+    }
+  }
+
+  private emit(eventType: string, data: any) {
+    if (this.listeners[eventType]) {
+      this.listeners[eventType].forEach(callback => callback(data));
+    }
+  }
+}
+
 // Invitations
 export async function createInvitation(): Promise<{ invitationUrl: string; token: string }>{
   return apiFetch('/invitations/', { method: 'POST' });

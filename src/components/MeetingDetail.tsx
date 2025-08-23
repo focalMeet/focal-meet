@@ -14,7 +14,22 @@ import {
   CheckSquare,
   MessageSquare
 } from 'lucide-react';
-import { getPublicSession, getSession, SessionItem, enrichNote, generateNote, getTask, shareSession, listNotes, NoteRead } from '../lib/api';
+import { 
+  getPublicSession, 
+  getSession, 
+  SessionItem, 
+  enrichNote, 
+  generateNote, 
+  getTask, 
+  shareSession, 
+  listNotes, 
+  NoteRead,
+  getEnhancedSession,
+  SessionEnhanced,
+  getSessionSections,
+  SmartNotesResponse
+} from '../lib/api';
+import SmartNotesGeneration from './SmartNotesGeneration';
 
 interface MeetingDetailProps {
   meetingId: string;
@@ -22,15 +37,18 @@ interface MeetingDetailProps {
 }
 
 const MeetingDetail: React.FC<MeetingDetailProps> = ({ meetingId, onBack }) => {
-  const [activeSection, setActiveSection] = useState<'summary' | 'actions' | 'transcript'>('summary');
+  const [activeSection, setActiveSection] = useState<'summary' | 'smart_notes' | 'sections' | 'transcript'>('summary');
   const [manualNotes, setManualNotes] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [session, setSession] = useState<SessionItem | null>(null);
+  const [enhancedSession, setEnhancedSession] = useState<SessionEnhanced | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<NoteRead | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [smartNotes, setSmartNotes] = useState<SmartNotesResponse | null>(null);
+  const [sections, setSections] = useState<any>(null);
 
   // Mock data (summary/actions/transcript) for now; session header will be live
   const meetingData = {
@@ -98,15 +116,40 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
       setLoading(true);
       setError(null);
       try {
-        const s = await getSession(meetingId);
-        if (!cancelled) setSession(s);
-      } catch (e) {
+        // Try to get enhanced session first
         try {
-          const ps = await getPublicSession(meetingId);
-          if (!cancelled) setSession(ps);
-        } catch (err: any) {
-          if (!cancelled) setError(err?.message || 'Failed to load session');
+          const enhancedS = await getEnhancedSession(meetingId);
+          if (!cancelled) {
+            setEnhancedSession(enhancedS);
+            // Convert to basic session format for compatibility
+            setSession({
+              id: enhancedS.id,
+              title: enhancedS.title,
+              status: enhancedS.status,
+              created_at: enhancedS.created_at,
+              updated_at: enhancedS.updated_at
+            });
+          }
+        } catch (enhancedError) {
+          // Fallback to basic session
+          try {
+            const s = await getSession(meetingId);
+            if (!cancelled) setSession(s);
+          } catch (e) {
+            const ps = await getPublicSession(meetingId);
+            if (!cancelled) setSession(ps);
+          }
         }
+
+        // Load sections if available
+        try {
+          const sectionsData = await getSessionSections(meetingId);
+          if (!cancelled) setSections(sectionsData);
+        } catch {
+          // Sections may not exist yet
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Failed to load session');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -176,6 +219,23 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
       const res = await shareSession(session.id);
       setShareUrl(res.shareUrl);
     } catch {}
+  };
+
+  const handleSmartNotesGenerated = (notes: SmartNotesResponse) => {
+    setSmartNotes(notes);
+    // Switch to sections view to show the generated content
+    setActiveSection('sections');
+    // Refresh sections data
+    loadSections();
+  };
+
+  const loadSections = async () => {
+    try {
+      const sectionsData = await getSessionSections(meetingId);
+      setSections(sectionsData);
+    } catch {
+      // Sections may not exist yet
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -264,22 +324,42 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
                   >
                     <div className="flex items-center">
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Meeting Summary
+                      概览
                     </div>
                   </button>
-                  <button
-                    onClick={() => setActiveSection('actions')}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                      activeSection === 'actions'
-                        ? 'border-red-500 text-red-400'
-                        : 'border-transparent text-gray-400 hover:text-white hover:border-gray-600'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <CheckSquare className="w-4 h-4 mr-2" />
-                      Action Items
-                    </div>
-                  </button>
+                  {enhancedSession && (
+                    <button
+                      onClick={() => setActiveSection('smart_notes')}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        activeSection === 'smart_notes'
+                          ? 'border-red-500 text-red-400'
+                          : 'border-transparent text-gray-400 hover:text-white hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        智能笔记生成
+                        {enhancedSession.enrichment_status === 'processing' && (
+                          <RefreshCw className="w-3 h-3 ml-1 animate-spin" />
+                        )}
+                      </div>
+                    </button>
+                  )}
+                  {sections && sections.sections.length > 0 && (
+                    <button
+                      onClick={() => setActiveSection('sections')}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        activeSection === 'sections'
+                          ? 'border-red-500 text-red-400'
+                          : 'border-transparent text-gray-400 hover:text-white hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <CheckSquare className="w-4 h-4 mr-2" />
+                        结构化笔记 ({sections.sections.length})
+                      </div>
+                    </button>
+                  )}
                   <button
                     onClick={() => setActiveSection('transcript')}
                     className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
@@ -290,7 +370,7 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
                   >
                     <div className="flex items-center">
                       <FileText className="w-4 h-4 mr-2" />
-                      Full Transcript
+                      转写稿
                     </div>
                   </button>
                 </nav>
@@ -300,60 +380,115 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
               <div className="p-6">
                 {activeSection === 'summary' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-white">AI Generated Summary</h3>
-                      <div className="flex items-center space-x-3">
-                        <select
-                          value={selectedTemplate}
-                          onChange={(e) => setSelectedTemplate(e.target.value)}
-                          className="px-3 py-2 bg-white/5 border border-white/10 rounded-md text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50"
-                        >
-                          {templates.map((template) => (
-                            <option key={template.id} value={template.id} className="bg-gray-800">
-                              {template.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={handleApplyTemplate}
-                          disabled={!selectedTemplate || isRegenerating}
-                          className="px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-md hover:from-red-600 hover:to-red-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                        >
-                          Apply Template
-                        </button>
+                    <h3 className="text-lg font-semibold text-white">会话概览</h3>
+                    
+                    {enhancedSession && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                          <div className="text-sm text-gray-400">会话状态</div>
+                          <div className="text-lg font-medium text-white">
+                            {enhancedSession.status === 'enriched' ? '已智能化' :
+                             enhancedSession.status === 'ready' ? '已就绪' :
+                             enhancedSession.status === 'processing' ? '处理中' : enhancedSession.status}
+                          </div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                          <div className="text-sm text-gray-400">智能笔记状态</div>
+                          <div className="text-lg font-medium text-white">
+                            {enhancedSession.enrichment_status === 'completed' ? '已完成' :
+                             enhancedSession.enrichment_status === 'processing' ? '生成中' :
+                             enhancedSession.enrichment_status === 'failed' ? '失败' : '待生成'}
+                          </div>
+                        </div>
+                        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                          <div className="text-sm text-gray-400">内容统计</div>
+                          <div className="text-lg font-medium text-white">
+                            {enhancedSession.sections_count} 个段落
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="prose max-w-none">
-                      <div className="whitespace-pre-line text-gray-300 leading-relaxed">
-                        {note?.content?.generated as any || meetingData.summary}
+                    )}
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-4 text-sm text-gray-400">
+                        <span>{enhancedSession?.has_transcript ? '✓ 有转写稿' : '○ 无转写稿'}</span>
+                        <span>{enhancedSession?.has_user_notes ? '✓ 有用户笔记' : '○ 无用户笔记'}</span>
+                        {enhancedSession?.audio_source_type && (
+                          <span>音频源: {
+                            enhancedSession.audio_source_type === 'upload' ? '上传' :
+                            enhancedSession.audio_source_type === 'url' ? 'URL' :
+                            enhancedSession.audio_source_type === 'realtime' ? '实时录制' :
+                            enhancedSession.audio_source_type
+                          }</span>
+                        )}
+                        {enhancedSession?.audio_duration && (
+                          <span>时长: {Math.floor(enhancedSession.audio_duration / 60)}:{(enhancedSession.audio_duration % 60).toString().padStart(2, '0')}</span>
+                        )}
                       </div>
+                      
+                      {enhancedSession?.final_markdown_preview && (
+                        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                          <div className="text-sm text-gray-400 mb-2">智能笔记预览:</div>
+                          <div className="text-gray-300 whitespace-pre-line">
+                            {enhancedSession.final_markdown_preview}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {activeSection === 'actions' && (
+                {activeSection === 'smart_notes' && enhancedSession && (
+                  <SmartNotesGeneration 
+                    session={enhancedSession}
+                    onNotesGenerated={handleSmartNotesGenerated}
+                  />
+                )}
+
+                {activeSection === 'sections' && sections && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Action Items</h3>
-                    <div className="space-y-3">
-                      {meetingData.actionItems.map((item) => (
-                        <div key={item.id} className="border border-white/10 rounded-lg p-4 bg-white/5">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-white">{item.task}</h4>
-                              <div className="mt-2 flex items-center space-x-4 text-sm text-gray-400">
-                                <span>Assignee: {item.assignee}</span>
-                                <span>Due: {item.deadline}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(item.priority)}`}>
-                                {item.priority === 'high' ? 'High Priority' : item.priority === 'medium' ? 'Medium Priority' : 'Low Priority'}
-                              </span>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(item.status)}`}>
-                                {item.status === 'completed' ? 'Completed' : item.status === 'in-progress' ? 'In Progress' : 'Pending'}
-                              </span>
-                            </div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-white">
+                        结构化笔记 ({sections.sections.length} 个段落)
+                      </h3>
+                      <div className="text-sm text-gray-400">
+                        生成模式: {sections.generation_type === 'enrich' ? 'Enrich' : 
+                                 sections.generation_type === 'generate' ? 'Generate' : '未知'}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {sections.sections.map((section: any, index: number) => (
+                        <div key={section.id} className="bg-white/5 rounded-lg p-4 border border-white/10">
+                          <div className="flex items-start justify-between mb-3">
+                            <h4 className={`font-medium text-white ${
+                              section.title_level === 1 ? 'text-xl' :
+                              section.title_level === 2 ? 'text-lg' :
+                              section.title_level === 3 ? 'text-base' : 'text-sm'
+                            }`}>
+                              {section.title_text}
+                            </h4>
+                            <span className="text-xs text-gray-400 bg-white/10 px-2 py-1 rounded">
+                              段落 {section.section_order}
+                            </span>
                           </div>
+                          
+                          {section.points && Array.isArray(section.points) && (
+                            <div className="space-y-2">
+                              {section.points.map((point: any, pointIndex: number) => (
+                                <div key={pointIndex} className="text-sm text-gray-300 pl-4 border-l border-gray-600">
+                                  {typeof point === 'string' ? point : 
+                                   point.content || point.text || JSON.stringify(point)}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {section.points && !Array.isArray(section.points) && (
+                            <div className="text-sm text-gray-300">
+                              {typeof section.points === 'string' ? section.points : JSON.stringify(section.points)}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -362,7 +497,7 @@ The meeting also discussed resource allocation and timeline scheduling to ensure
 
                 {activeSection === 'transcript' && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Full Transcript</h3>
+                    <h3 className="text-lg font-semibold text-white">转写稿</h3>
                     <div className="bg-white/5 rounded-lg p-4 font-mono text-sm leading-relaxed whitespace-pre-line text-gray-300 border border-white/10">
                       {(note?.content?.transcript as any) || meetingData.transcript}
                     </div>

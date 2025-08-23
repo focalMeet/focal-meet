@@ -1,7 +1,33 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Upload as UploadIcon, Link2, Search, Calendar, Clock, MoreVertical } from 'lucide-react';
-import { createSession, listSessions, SessionItem, uploadSessionAudioFromUrl, uploadSessionAudio } from '../../lib/api';
+import { 
+  Mic, 
+  Upload as UploadIcon, 
+  Link2, 
+  Search, 
+  Calendar, 
+  Clock, 
+  MoreVertical,
+  Sparkles,
+  FileText,
+  Brain,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Filter
+} from 'lucide-react';
+import { 
+  createSession, 
+  listSessions, 
+  SessionItem, 
+  uploadSessionAudioFromUrl, 
+  uploadSessionAudio,
+  getEnhancedSessions,
+  searchSessions,
+  getSessionStatistics,
+  SessionEnhanced,
+  SessionsListResponse
+} from '../../lib/api';
 import { isAuthenticated } from '../../lib/auth';
 
 type Meeting = SessionItem;
@@ -10,8 +36,16 @@ const MeetingsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = React.useState('');
   const [meetings, setMeetings] = React.useState<Meeting[]>([]);
+  const [enhancedSessions, setEnhancedSessions] = React.useState<SessionEnhanced[]>([]);
+  const [statistics, setStatistics] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [useEnhancedView, setUseEnhancedView] = React.useState(true);
+  const [statusFilter, setStatusFilter] = React.useState<string>('');
+  const [enrichmentFilter, setEnrichmentFilter] = React.useState<string>('');
+  const [showFilters, setShowFilters] = React.useState(false);
+  const [page, setPage] = React.useState(1);
+  const [totalCount, setTotalCount] = React.useState(0);
   // Mock card data for early UI preview
   const useMockCards = true;
   type MockCard = {
@@ -51,10 +85,49 @@ const MeetingsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      if (useEnhancedView) {
+        const data = await getEnhancedSessions({
+          page,
+          page_size: 20,
+          status_filter: statusFilter || undefined,
+          enrichment_status: enrichmentFilter || undefined
+        });
+        setEnhancedSessions(data.sessions);
+        setStatistics(data.statistics);
+        setTotalCount(data.total_count);
+      } else {
       const data = await listSessions();
       setMeetings(data);
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to load sessions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      fetchSessions();
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const searchRequest = {
+        query: searchTerm,
+        status: statusFilter ? [statusFilter] : undefined,
+        enrichment_status: enrichmentFilter ? [enrichmentFilter] : undefined,
+        page,
+        page_size: 20
+      };
+      const data = await searchSessions(searchRequest);
+      setEnhancedSessions(data.sessions);
+      setStatistics(data.statistics);
+      setTotalCount(data.total_count);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to search sessions');
     } finally {
       setLoading(false);
     }
@@ -66,11 +139,15 @@ const MeetingsPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'enriched':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'ready':
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
       case 'processing':
         return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      case 'draft':
+      case 'recording':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'pending':
         return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
       default:
         return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
@@ -79,14 +156,70 @@ const MeetingsPage: React.FC = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'Completed';
+      case 'enriched':
+        return '已智能化';
+      case 'ready':
+        return '已就绪';
       case 'processing':
-        return 'Processing';
-      case 'draft':
-        return 'Draft';
+        return '处理中';
+      case 'recording':
+        return '录制中';
+      case 'pending':
+        return '等待中';
       default:
-        return 'Unknown';
+        return status;
+    }
+  };
+
+  const getEnrichmentStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'processing':
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'failed':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'pending':
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+    }
+  };
+
+  const getEnrichmentStatusText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return '已完成';
+      case 'processing':
+        return '生成中';
+      case 'failed':
+        return '失败';
+      case 'pending':
+        return '待生成';
+      default:
+        return status;
+    }
+  };
+
+  const getGenerationTypeIcon = (type: string | null) => {
+    switch (type) {
+      case 'enrich':
+        return <FileText className="w-4 h-4" />;
+      case 'generate':
+        return <Sparkles className="w-4 h-4" />;
+      default:
+        return <Brain className="w-4 h-4" />;
+    }
+  };
+
+  const getGenerationTypeText = (type: string | null) => {
+    switch (type) {
+      case 'enrich':
+        return 'Enrich';
+      case 'generate':
+        return 'Generate';
+      default:
+        return '未生成';
     }
   };
 
@@ -219,23 +352,136 @@ const MeetingsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Statistics Overview */}
+          {statistics && useEnhancedView && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/10 p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-500/20 rounded-lg mr-3">
+                    <FileText className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-white">{statistics.total_sessions}</div>
+                    <div className="text-sm text-gray-400">总会话数</div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/10 p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-emerald-500/20 rounded-lg mr-3">
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-white">{statistics.enriched_sessions}</div>
+                    <div className="text-sm text-gray-400">已智能化</div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/10 p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-yellow-500/20 rounded-lg mr-3">
+                    <RefreshCw className="w-5 h-5 text-yellow-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-white">{statistics.pending_sessions}</div>
+                    <div className="text-sm text-gray-400">待处理</div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/10 p-4">
+                <div className="flex items-center">
+                  <div className="p-2 bg-red-500/20 rounded-lg mr-3">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-semibold text-white">{statistics.failed_sessions}</div>
+                    <div className="text-sm text-gray-400">失败</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-black/20 backdrop-blur-sm rounded-xl border border-white/10">
             <div className="px-6 py-4 border-b border-white/10">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-white">Meeting List</h2>
+                <h2 className="text-lg font-semibold text-white">
+                  会议列表 
+                  {useEnhancedView && totalCount > 0 && (
+                    <span className="text-sm text-gray-400 ml-2">({totalCount} 个)</span>
+                  )}
+                </h2>
                 <div className="flex items-center space-x-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Search meetings..."
+                      placeholder="搜索会议..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                       className="pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50"
                     />
                   </div>
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      showFilters ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Filter className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setUseEnhancedView(!useEnhancedView)}
+                    className="px-3 py-2 text-sm bg-white/5 text-gray-400 hover:text-white transition-colors rounded-lg border border-white/10"
+                  >
+                    {useEnhancedView ? '基础视图' : '增强视图'}
+                  </button>
                 </div>
               </div>
+              
+              {/* Filters */}
+              {showFilters && useEnhancedView && (
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">会话状态</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                    >
+                      <option value="">全部状态</option>
+                      <option value="pending">等待中</option>
+                      <option value="recording">录制中</option>
+                      <option value="processing">处理中</option>
+                      <option value="ready">已就绪</option>
+                      <option value="enriched">已智能化</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">智能笔记状态</label>
+                    <select
+                      value={enrichmentFilter}
+                      onChange={(e) => setEnrichmentFilter(e.target.value)}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                    >
+                      <option value="">全部</option>
+                      <option value="pending">待生成</option>
+                      <option value="processing">生成中</option>
+                      <option value="completed">已完成</option>
+                      <option value="failed">失败</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={searchTerm ? handleSearch : fetchSessions}
+                      className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 text-sm"
+                    >
+                      应用筛选
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             {useMockCards ? (
               <div className="p-6">
@@ -273,15 +519,106 @@ const MeetingsPage: React.FC = () => {
             ) : (
               <div className="divide-y divide-white/10">
                 {loading && (
-                  <div className="px-6 py-8 text-center text-gray-400">Loading sessions...</div>
+                  <div className="px-6 py-8 text-center text-gray-400">加载中...</div>
                 )}
                 {error && !loading && (
                   <div className="px-6 py-8 text-center text-red-400">{error}</div>
                 )}
-                {!loading && !error && filteredMeetings.length === 0 && (
-                  <div className="px-6 py-8 text-center text-gray-400">No sessions found</div>
+                {!loading && !error && !useEnhancedView && filteredMeetings.length === 0 && (
+                  <div className="px-6 py-8 text-center text-gray-400">没有找到会话</div>
                 )}
-                {!loading && !error &&
+                {!loading && !error && useEnhancedView && enhancedSessions.length === 0 && (
+                  <div className="px-6 py-8 text-center text-gray-400">没有找到会话</div>
+                )}
+                
+                {/* Enhanced Sessions View */}
+                {!loading && !error && useEnhancedView &&
+                  enhancedSessions.map((session) => (
+                    <button
+                      key={session.id}
+                      onClick={() => handleClickMeeting(session.id)}
+                      className="w-full text-left px-6 py-4 hover:bg-white/5 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h3 className="text-sm font-medium text-white">{session.title || '无标题会话'}</h3>
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
+                                session.status
+                              )}`}
+                            >
+                              {getStatusText(session.status)}
+                            </span>
+                            {session.enrichment_status !== 'pending' && (
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getEnrichmentStatusColor(
+                                  session.enrichment_status
+                                )}`}
+                              >
+                                {getGenerationTypeIcon(session.generation_type)}
+                                <span className="ml-1">{getEnrichmentStatusText(session.enrichment_status)}</span>
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center space-x-4 text-sm text-gray-400 mb-2">
+                            <span className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-1" />
+                              {new Date(session.created_at).toLocaleString()}
+                            </span>
+                            <span className="flex items-center">
+                              <Clock className="w-4 h-4 mr-1" />
+                              {session.updated_at ? `更新于 ${new Date(session.updated_at).toLocaleString()}` : '—'}
+                            </span>
+                            {session.audio_duration && (
+                              <span className="flex items-center">
+                                <Mic className="w-4 h-4 mr-1" />
+                                {Math.floor(session.audio_duration / 60)}:{(session.audio_duration % 60).toString().padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Session Details */}
+                          <div className="flex items-center space-x-4 text-xs text-gray-500">
+                            <span>{session.has_transcript ? '✓ 转写稿' : '○ 无转写稿'}</span>
+                            <span>{session.has_user_notes ? '✓ 用户笔记' : '○ 无用户笔记'}</span>
+                            {session.sections_count > 0 && (
+                              <span>{session.sections_count} 个段落</span>
+                            )}
+                            {session.audio_source_type && (
+                              <span>
+                                来源: {session.audio_source_type === 'upload' ? '上传' : 
+                                      session.audio_source_type === 'url' ? 'URL' : 
+                                      session.audio_source_type === 'realtime' ? '实时录制' : session.audio_source_type}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Preview */}
+                          {session.final_markdown_preview && (
+                            <div className="mt-2 p-2 bg-white/5 rounded text-xs text-gray-300 line-clamp-2">
+                              {session.final_markdown_preview}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {session.generation_type && (
+                            <span className="flex items-center text-xs text-gray-400 bg-white/5 px-2 py-1 rounded">
+                              {getGenerationTypeIcon(session.generation_type)}
+                              <span className="ml-1">{getGenerationTypeText(session.generation_type)}</span>
+                            </span>
+                          )}
+                          <span className="p-2 text-gray-400 rounded-lg bg-white/5">
+                            <MoreVertical className="w-4 h-4" />
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  
+                {/* Basic Sessions View */}
+                {!loading && !error && !useEnhancedView &&
                   filteredMeetings.map((meeting) => (
                     <button
                       key={meeting.id}
@@ -291,7 +628,7 @@ const MeetingsPage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
-                            <h3 className="text-sm font-medium text-white">{meeting.title || 'Untitled Session'}</h3>
+                            <h3 className="text-sm font-medium text-white">{meeting.title || '无标题会话'}</h3>
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
                                 meeting.status
@@ -307,7 +644,7 @@ const MeetingsPage: React.FC = () => {
                             </span>
                             <span className="flex items-center">
                               <Clock className="w-4 h-4 mr-1" />
-                              {meeting.updated_at ? `Updated ${new Date(meeting.updated_at).toLocaleString()}` : '—'}
+                              {meeting.updated_at ? `更新于 ${new Date(meeting.updated_at).toLocaleString()}` : '—'}
                             </span>
                           </div>
                         </div>
