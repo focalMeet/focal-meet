@@ -1,6 +1,6 @@
 ## Focal Meet
 
-Language: [English](README.md) | [中文](README_ZH.md)
+Language: [English](README.md)
 
 > Unlock the Future Meeting knowledge  
 > with Focal Meet powered by AI
