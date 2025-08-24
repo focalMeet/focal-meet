@@ -10,7 +10,7 @@ const TemplatesPage: React.FC = () => {
   const [templatesLoading, setTemplatesLoading] = React.useState(false);
   const [templatesError, setTemplatesError] = React.useState<string | null>(null);
   // creation states are not used in mock mode for now
-  const useMockTemplates = true;
+  const useMockTemplates = false;
   const mockTemplates: TemplateRead[] = [
     {
       id: '11111111-1111-1111-1111-111111111111',

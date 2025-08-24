@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Mic,
   Upload,
   FileText,
   Clock,
-  Users,
   Calendar,
   Search,
   Filter,
@@ -14,42 +13,88 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { listSessions, SessionItem } from '../lib/api';
+import { 
+  listSessions, 
+  SessionItem, 
+  getEnhancedSessions, 
+  getSessionStatistics,
+  SessionEnhanced 
+} from '../lib/api';
 import { isAuthenticated } from '../lib/auth';
 import { useNavigate } from 'react-router-dom';
 
-interface DashboardProps {}
+interface DashboardProps {
+  className?: string;
+}
+
+interface StatisticsData {
+  basic: {
+    total_sessions: number;
+    enriched_sessions: number;
+    pending_sessions: number;
+    failed_sessions: number;
+  };
+  monthly: Array<{
+    month: string;
+    count: number;
+  }>;
+  generation_types: Record<string, number>;
+  audio_sources: Record<string, number>;
+  generated_at: string;
+}
 
 type Meeting = SessionItem & { duration?: string; participants?: number; type?: 'real-time' | 'uploaded' };
 
 const Dashboard: React.FC<DashboardProps> = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [enhancedSessions, setEnhancedSessions] = useState<SessionEnhanced[]>([]);
+  const [statistics, setStatistics] = useState<StatisticsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useEnhanced, setUseEnhanced] = useState(true);
   const navigate = useNavigate();
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listSessions();
-      setMeetings(data);
-    } catch (e: any) {
+      if (useEnhanced) {
+        // 尝试使用增强的会话管理
+        try {
+          const [sessionData, statsData] = await Promise.all([
+            getEnhancedSessions({ page: 1, page_size: 10 }),
+            getSessionStatistics()
+          ]);
+          setEnhancedSessions(sessionData.sessions);
+          setStatistics(statsData);
+        } catch (enhancedError) {
+          // 如果增强功能失败，回退到基础功能
+          console.warn('Enhanced sessions failed, falling back to basic:', enhancedError);
+          setUseEnhanced(false);
+          const data = await listSessions();
+          setMeetings(data);
+        }
+      } else {
+        const data = await listSessions();
+        setMeetings(data);
+      }
+    } catch (e: unknown) {
+      const error = e as { status?: number; message?: string };
       // 提供更友好的错误信息
       let errorMessage = 'Failed to load sessions';
-      if (e?.status === 403) {
+      if (error?.status === 403) {
         errorMessage = '权限不足，请重新登录';
-      } else if (e?.status === 401) {
+      } else if (error?.status === 401) {
         errorMessage = '登录已过期，请重新登录';
-      } else if (e?.message) {
-        errorMessage = e.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  };
+  }, [useEnhanced]);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -57,15 +102,19 @@ const Dashboard: React.FC<DashboardProps> = () => {
       return;
     }
     fetchSessions();
-  }, []);
+  }, [navigate, fetchSessions]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'enriched':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'ready':
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
       case 'processing':
         return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      case 'draft':
+      case 'recording':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'pending':
         return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
       default:
         return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
@@ -74,24 +123,35 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'Completed';
+      case 'enriched':
+        return '已智能化';
+      case 'ready':
+        return '已就绪';
       case 'processing':
-        return 'Processing';
-      case 'draft':
-        return 'Draft';
+        return '处理中';
+      case 'recording':
+        return '录制中';
+      case 'pending':
+        return '等待中';
       default:
-        return 'Unknown';
+        return status;
     }
   };
 
   const filteredMeetings = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return meetings;
-    return meetings.filter(
-      (m) => m.title?.toLowerCase().includes(term) || m.id.toLowerCase().includes(term)
-    );
-  }, [searchTerm, meetings]);
+    if (useEnhanced) {
+      if (!term) return enhancedSessions;
+      return enhancedSessions.filter(
+        (m) => m.title?.toLowerCase().includes(term) || m.id.toLowerCase().includes(term)
+      );
+    } else {
+      if (!term) return meetings;
+      return meetings.filter(
+        (m) => m.title?.toLowerCase().includes(term) || m.id.toLowerCase().includes(term)
+      );
+    }
+  }, [searchTerm, meetings, enhancedSessions, useEnhanced]);
 
   const handleClickMeeting = (id: string) => {
     navigate(`/app/meetings/${id}`);
@@ -164,8 +224,10 @@ const Dashboard: React.FC<DashboardProps> = () => {
                   <FileText className="w-6 h-6 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400">Total Meetings</p>
-                  <p className="text-2xl font-bold text-white">24</p>
+                  <p className="text-sm font-medium text-gray-400">总会话数</p>
+                  <p className="text-2xl font-bold text-white">
+                    {statistics?.basic?.total_sessions || filteredMeetings.length || 0}
+                  </p>
                 </div>
               </div>
             </div>
@@ -173,23 +235,27 @@ const Dashboard: React.FC<DashboardProps> = () => {
             <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-white/20 transition-colors">
               <div className="flex items-center">
                 <div className="p-3 bg-emerald-500/20 rounded-xl mr-4">
-                  <Clock className="w-6 h-6 text-emerald-400" />
+                  <Zap className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400">Total Duration</p>
-                  <p className="text-2xl font-bold text-white">18.5 hrs</p>
+                  <p className="text-sm font-medium text-gray-400">已智能化</p>
+                  <p className="text-2xl font-bold text-white">
+                    {statistics?.basic?.enriched_sessions || 0}
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-white/20 transition-colors">
               <div className="flex items-center">
-                <div className="p-3 bg-purple-500/20 rounded-xl mr-4">
-                  <Users className="w-6 h-6 text-purple-400" />
+                <div className="p-3 bg-yellow-500/20 rounded-xl mr-4">
+                  <Clock className="w-6 h-6 text-yellow-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400">Participants</p>
-                  <p className="text-2xl font-bold text-white">156</p>
+                  <p className="text-sm font-medium text-gray-400">待处理</p>
+                  <p className="text-2xl font-bold text-white">
+                    {statistics?.basic?.pending_sessions || 0}
+                  </p>
                 </div>
               </div>
             </div>
@@ -200,8 +266,13 @@ const Dashboard: React.FC<DashboardProps> = () => {
                   <TrendingUp className="w-6 h-6 text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-400">This Month</p>
-                  <p className="text-2xl font-bold text-white">8</p>
+                  <p className="text-sm font-medium text-gray-400">本月新增</p>
+                  <p className="text-2xl font-bold text-white">
+                    {statistics?.monthly?.find((m) => {
+                      const currentMonth = new Date().toISOString().slice(0, 7);
+                      return m.month === currentMonth;
+                    })?.count || 0}
+                  </p>
                 </div>
               </div>
             </div>
