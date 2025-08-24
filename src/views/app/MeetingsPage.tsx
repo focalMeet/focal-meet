@@ -47,7 +47,7 @@ const MeetingsPage: React.FC = () => {
   const [page, setPage] = React.useState(1);
   const [totalCount, setTotalCount] = React.useState(0);
   // Mock card data for early UI preview
-  const useMockCards = true;
+  const useMockCards = false;
   type MockCard = {
     id: string;
     title: string;

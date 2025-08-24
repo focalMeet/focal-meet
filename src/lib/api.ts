@@ -495,6 +495,7 @@ export class LiveMeetingConnection {
   private sessionId: string;
   private token: string;
   private listeners: { [key: string]: ((data: any) => void)[] } = {};
+  private isManualDisconnect: boolean = false;
 
   constructor(sessionId: string, token: string) {
     this.sessionId = sessionId;
@@ -503,17 +504,53 @@ export class LiveMeetingConnection {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = `${API_BASE.replace('http', 'ws')}/live/meetings/${this.sessionId}/stream?token=${this.token}`;
+      // 构建WebSocket URL
+      let wsUrl: string;
+      if (API_BASE.startsWith('http')) {
+        // 如果是完整URL，替换协议
+        wsUrl = `${API_BASE.replace('http', 'ws')}/live/meetings/${this.sessionId}/stream?token=${this.token}`;
+      } else {
+        // 在开发环境中，WebSocket需要直接连接后端，不能通过Vite代理
+        const isDevelopment = import.meta.env.DEV;
+        if (isDevelopment) {
+          // 开发环境：直接连接后端
+          wsUrl = `ws://localhost:8000${API_BASE}/live/meetings/${this.sessionId}/stream?token=${this.token}`;
+        } else {
+          // 生产环境：使用当前域名
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const host = window.location.host;
+          wsUrl = `${protocol}//${host}${API_BASE}/live/meetings/${this.sessionId}/stream?token=${this.token}`;
+        }
+      }
+      
+      console.log('[WebSocket] Connecting to:', wsUrl);
       this.ws = new WebSocket(wsUrl);
 
-      this.ws.onopen = () => {
-        console.log('[WebSocket] Connected to live meeting');
+      // 设置超时
+      const timeout = setTimeout(() => {
+        this.off('connection_ready', onConnectionReady);
+        reject(new Error('WebSocket connection timeout'));
+      }, 10000); // 10秒超时
+
+      // 监听 connection_ready 消息来确认连接完全建立
+      const onConnectionReady = (data: any) => {
+        console.log('[WebSocket] ✅ Connection ready received:', data, 'readyState=', this.ws?.readyState);
+        clearTimeout(timeout);
+        this.off('connection_ready', onConnectionReady);
         resolve();
+      };
+      
+      this.on('connection_ready', onConnectionReady);
+
+      this.ws.onopen = () => {
+        console.log('[WebSocket] ✅ Connected to live meeting, readyState=', this.ws?.readyState);
+        // 不在这里 resolve，而是等待 connection_ready 消息
       };
 
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          console.log('[WebSocket] 📨 收到消息:', message);
           this.emit(message.type, message.data);
         } catch (e) {
           console.error('[WebSocket] Failed to parse message:', e);
@@ -522,17 +559,27 @@ export class LiveMeetingConnection {
 
       this.ws.onerror = (error) => {
         console.error('[WebSocket] Connection error:', error);
+        clearTimeout(timeout);
+        this.off('connection_ready', onConnectionReady);
         reject(error);
       };
 
       this.ws.onclose = () => {
-        console.log('[WebSocket] Connection closed');
+        if (this.isManualDisconnect) {
+          console.log('[WebSocket] 手动断开连接完成');
+        } else {
+          console.error('[WebSocket] 🔴 意外断开连接!');
+        }
+        clearTimeout(timeout);
+        this.off('connection_ready', onConnectionReady);
         this.emit('disconnected', {});
       };
     });
   }
 
   disconnect() {
+    console.log('[WebSocket] 手动断开连接');
+    this.isManualDisconnect = true;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -540,12 +587,25 @@ export class LiveMeetingConnection {
   }
 
   sendMessage(type: string, data: any = {}) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type, data }));
+    console.log(`[WebSocket] sendMessage调用: type=${type}, ws存在=${!!this.ws}, readyState=${this.ws?.readyState}, isManualDisconnect=${this.isManualDisconnect}`);
+    
+    if (!this.ws) {
+      console.error(`[WebSocket] ❌ WebSocket对象为null! type=${type}`);
+      console.error(`[WebSocket] ❌ 调用栈:`, new Error().stack);
+      return;
     }
+    
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      console.error(`[WebSocket] ❌ WebSocket未开启，状态: ${this.ws.readyState}, type=${type}, WebSocket.OPEN=${WebSocket.OPEN}`);
+      return;
+    }
+    
+    console.log(`[WebSocket] ✅ 发送消息: type=${type}, data=`, data);
+    this.ws.send(JSON.stringify({ type, data }));
   }
 
   startRecording(audioConfig?: any) {
+    console.log('[WebSocket] 调用startRecording, audioConfig=', audioConfig);
     this.sendMessage('start_recording', { audio_config: audioConfig });
   }
 

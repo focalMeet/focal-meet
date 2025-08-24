@@ -43,6 +43,9 @@ const LiveRecord: React.FC = () => {
   // Basic states
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
+  const [isRecordingActive, setIsRecordingActive] = useState(false);
+  const [speechRecognitionStarted, setSpeechRecognitionStarted] = useState(false);
+  const [serverRecordingConfirmed, setServerRecordingConfirmed] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [title, setTitle] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
@@ -57,6 +60,7 @@ const LiveRecord: React.FC = () => {
   // Session and WebSocket states
   const [session, setSession] = useState<SessionCreated | null>(null);
   const [wsConnection, setWsConnection] = useState<LiveMeetingConnection | null>(null);
+  const wsConnectionRef = useRef<LiveMeetingConnection | null>(null);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +90,7 @@ const LiveRecord: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaRecorderRef = useRef<ScriptProcessorNode | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
@@ -98,13 +102,25 @@ const LiveRecord: React.FC = () => {
     }
   }, [navigate]);
 
-      const sendAudioData = useCallback(async (audioBlob: Blob) => {
-    if (!wsConnection) return;
+  // 计算音频级别（RMS值）
+  const calculateAudioLevel = useCallback((pcmData: Int16Array): number => {
+    let sum = 0;
+    for (let i = 0; i < pcmData.length; i++) {
+      sum += pcmData[i] * pcmData[i];
+    }
+    return Math.sqrt(sum / pcmData.length);
+  }, []);
+
+  const sendAudioData = useCallback(async (pcmData: ArrayBuffer) => {
+    if (!wsConnection) {
+      console.warn('🔴 WebSocket连接不存在，跳过音频数据');
+      return;
+    }
     
     try {
-      // 将 Blob 转换为 base64
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      // 将 PCM 数据转换为 base64
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(pcmData)));
+      console.debug('🎵 发送音频数据:', base64.length, '字符');
       
       wsConnection.sendAudioChunk(base64);
     } catch (error) {
@@ -112,27 +128,113 @@ const LiveRecord: React.FC = () => {
     }
   }, [wsConnection]);
 
-  const setupMediaRecorder = useCallback((stream: MediaStream) => {
+  const setupPCMRecorder = useCallback((stream: MediaStream, audioContext: AudioContext, microphone: MediaStreamAudioSourceNode) => {
     try {
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      // 使用共享的 AudioContext 和 microphone
       
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          // 发送音频数据到 WebSocket
-          sendAudioData(event.data);
+      // 创建ScriptProcessorNode来处理音频数据
+      const bufferSize = 4096; // 缓冲区大小
+      const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      
+      // PCM数据缓冲区 - 按腾讯云要求每40ms发送1280字节
+      let pcmBuffer: Float32Array[] = [];
+      let bufferLength = 0;
+      const samplesPerChunk = 640; // 40ms @ 16kHz = 640个样本 = 1280字节
+      
+      processor.onaudioprocess = (event) => {
+        const inputBuffer = event.inputBuffer;
+        const inputData = inputBuffer.getChannelData(0); // 获取单声道数据
+        
+        // 检查输入音频数据
+        const maxInput = Math.max(...Array.from(inputData));
+        const minInput = Math.min(...Array.from(inputData));
+        const inputLevel = Math.sqrt(Array.from(inputData).reduce((sum, sample) => sum + sample * sample, 0) / inputData.length);
+        
+        if (inputLevel > 0.001) { // 只有在有音频输入时才记录
+          console.debug('🎤 音频输入检测:', {
+            samples: inputData.length,
+            max: maxInput.toFixed(6),
+            min: minInput.toFixed(6), 
+            level: inputLevel.toFixed(6),
+            firstSamples: Array.from(inputData.slice(0, 5)).map(s => s.toFixed(6))
+          });
+        }
+        
+        // 复制数据到缓冲区
+        const channelData = new Float32Array(inputData.length);
+        channelData.set(inputData);
+        pcmBuffer.push(channelData);
+        bufferLength += channelData.length;
+        
+        // 当缓冲区达到目标大小时发送数据（40ms，符合腾讯云要求）
+        while (bufferLength >= samplesPerChunk) {
+          // 合并缓冲区中的数据
+          const totalData = new Float32Array(bufferLength);
+          let offset = 0;
+          for (const buffer of pcmBuffer) {
+            totalData.set(buffer, offset);
+            offset += buffer.length;
+          }
+          
+          // 提取前640个样本（40ms数据）
+          const chunkData = totalData.slice(0, samplesPerChunk);
+          
+          // 转换为16位PCM
+          const pcm16 = new Int16Array(chunkData.length);
+          for (let i = 0; i < chunkData.length; i++) {
+            // 将float32 (-1到1) 转换为int16 (-32768到32767)
+            pcm16[i] = Math.max(-32768, Math.min(32767, Math.round(chunkData[i] * 32767)));
+          }
+          
+          // 音频数据质量检查
+          const audioLevel = calculateAudioLevel(pcm16);
+          const isValidAudio = audioLevel > 50; // 设置最小音量阈值
+          
+          // 只在录制激活且服务器确认后发送有效的PCM数据
+          if (isRecordingActive && serverRecordingConfirmed) {
+            if (isValidAudio) {
+              // 详细调试PCM数据
+              console.debug('🎵 发送40ms音频数据，样本数:', pcm16.length, '音量级别:', audioLevel);
+              console.debug('🔍 前端PCM采样点示例:', Array.from(pcm16.slice(0, 10)));
+              console.debug('🔍 原始Float32示例:', Array.from(chunkData.slice(0, 10)));
+              
+              // 创建正确的字节数组确保little-endian字节序
+              const bytes = new Uint8Array(pcm16.length * 2);
+              for (let i = 0; i < pcm16.length; i++) {
+                const sample = pcm16[i];
+                bytes[i * 2] = sample & 0xFF;        // 低字节
+                bytes[i * 2 + 1] = (sample >> 8) & 0xFF; // 高字节
+              }
+              
+              console.debug('🔍 字节数组头部:', Array.from(bytes.slice(0, 20)));
+              sendAudioData(bytes.buffer);
+            } else {
+              console.debug('🔇 跳过40ms静音数据，音量级别:', audioLevel);
+            }
+          } else if (isRecordingActive && !serverRecordingConfirmed) {
+            console.debug('⏳ 等待服务器录制确认中，暂不发送音频数据');
+          }
+          
+          // 保留剩余数据继续下次处理
+          const remainingData = totalData.slice(samplesPerChunk);
+          pcmBuffer = remainingData.length > 0 ? [remainingData] : [];
+          bufferLength = remainingData.length;
         }
       };
       
-      mediaRecorderRef.current = mediaRecorder;
+      // 连接音频节点
+      microphone.connect(processor);
+      processor.connect(audioContext.destination);
+      
+      // 保存引用用于停止
+      mediaRecorderRef.current = processor;
+      
     } catch (error: unknown) {
-      console.error('MediaRecorder 设置失败:', error);
+      console.error('PCM录制器设置失败:', error);
       const errorMessage = error instanceof Error ? error.message : '未知错误';
       setError('音频录制器设置失败: ' + errorMessage);
     }
-  }, [sendAudioData]);
+  }, [sendAudioData, isRecordingActive, wsConnection, speechRecognitionStarted, serverRecordingConfirmed, calculateAudioLevel]);
 
   const requestMicrophoneAccess = useCallback(async (deviceId?: string) => {
     try {
@@ -156,8 +258,8 @@ const LiveRecord: React.FC = () => {
       }
       streamRef.current = stream;
       
-      // 设置音频分析
-      const audioContext = new AudioContext();
+      // 设置音频分析，配置16kHz采样率
+      const audioContext = new AudioContext({ sampleRate: 16000 });
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(stream);
       
@@ -179,8 +281,8 @@ const LiveRecord: React.FC = () => {
       };
       detectAudio();
       
-      // 设置 MediaRecorder
-      setupMediaRecorder(stream);
+      // 设置 PCM 录制器，共享 AudioContext
+      setupPCMRecorder(stream, audioContext, microphone);
       
     } catch (error: unknown) {
       console.error('麦克风访问被拒绝:', error);
@@ -188,7 +290,7 @@ const LiveRecord: React.FC = () => {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
       setError('麦克风访问失败: ' + errorMessage);
     }
-  }, [selectedDeviceId, setupMediaRecorder]);
+  }, [selectedDeviceId, sendAudioData, isRecordingActive, wsConnection, speechRecognitionStarted, serverRecordingConfirmed, setupPCMRecorder]);
 
   const checkAudioDevices = useCallback(async () => {
     try {
@@ -251,8 +353,9 @@ const LiveRecord: React.FC = () => {
   }
   };
 
-  const connectWebSocket = async (sessionId: string) => {
+  const connectWebSocket = async (sessionId: string): Promise<LiveMeetingConnection> => {
     try {
+      console.log('🔌 开始连接WebSocket, sessionId:', sessionId);
       setConnectionState('connecting');
       setConnectionStatus('连接服务器中...');
       
@@ -263,52 +366,143 @@ const LiveRecord: React.FC = () => {
       
       const connection = new LiveMeetingConnection(sessionId, token);
       
-      // 设置事件监听器
-      connection.on('connected', () => {
-        console.log('WebSocket 连接成功');
+            // 创建Promise来等待连接建立
+      const connectionPromise = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.error('🔴 WebSocket连接超时，10秒内未收到connection_ready');
+          reject(new Error('WebSocket连接超时 - 未收到connection_ready事件'));
+        }, 10000); // 10秒超时
+        
+      connection.on('connection_ready', () => {
+          console.log('✅ WebSocket connection_ready事件已收到');
         setConnectionState('connected');
         setConnectionStatus('已连接');
         setError(null);
+          clearTimeout(timeout);
+          resolve();
+        });
+        
+        connection.on('error', (error: any) => {
+          console.error('🔴 WebSocket连接错误:', error);
+          clearTimeout(timeout);
+          reject(error);
+        });
+        
+                // 添加额外的断开连接检测
+        const onDisconnected = () => {
+          console.error('🔴 WebSocket在建立过程中断开');
+          clearTimeout(timeout);
+          connection.off('disconnected', onDisconnected);
+          reject(new Error('WebSocket在建立过程中断开'));
+        };
+        connection.on('disconnected', onDisconnected);
       });
       
       connection.on('disconnected', () => {
-        console.log('WebSocket 连接断开');
+        console.log('🔴 WebSocket 连接断开');
         setConnectionState('disconnected');
         setConnectionStatus('连接断开');
       });
       
-        connection.on('transcript', (data: Record<string, unknown>) => {
-    console.log('收到转写结果:', data);
-    addTranscriptItem(data);
-  });
-  
-  connection.on('error', (data: Record<string, unknown>) => {
-    console.error('WebSocket 错误:', data);
-    setError(String(data.message) || '连接错误');
-    setConnectionState('error');
-  });
-  
-  connection.on('status', (data: Record<string, unknown>) => {
-    console.log('状态更新:', data);
-    setConnectionStatus(String(data.message) || '');
-  });
+      // 监听转写结果（包括实时和最终结果）
+      connection.on('transcript_partial', (data: Record<string, unknown>) => {
+        console.log('收到实时转写结果:', data);
+        addTranscriptItem(data);
+      });
       
+      connection.on('transcript_final', (data: Record<string, unknown>) => {
+        console.log('收到最终转写结果:', data);
+        addTranscriptItem(data);
+      });
+      
+      // 监听状态更新
+      connection.on('status_update', (data: Record<string, unknown>) => {
+        console.log('状态更新:', data);
+        setConnectionStatus(String(data.message) || '');
+      });
+      
+      // 监听录制状态消息
+      connection.on('recording_started', (data: Record<string, unknown>) => {
+        console.log('✅ 录制已启动:', data);
+        const message = String(data.message) || '录制中...';
+        setConnectionStatus(message);
+        setServerRecordingConfirmed(true); // 服务器确认录制已开始
+        
+        // 延迟连接成功的特殊提示
+        if (data.delayed_connection) {
+          console.log('🎉 延迟连接成功，现在可以开始说话了！');
+        } else if (data.immediate_connection) {
+          console.log('🎉 腾讯云连接成功，现在可以开始说话了！');
+        }
+      });
+
+      connection.on('connection_pending', (data: Record<string, unknown>) => {
+        console.log('⏳ 连接延迟中:', data);
+        setConnectionStatus(String(data.message) || '正在连接腾讯云，请稍候...');
+        // 保持等待状态，不设置serverRecordingConfirmed为true
+        console.log('📢 请稍候，腾讯云连接建立中，暂时不要说话');
+      });
+      
+      connection.on('recording_stopped', (data: Record<string, unknown>) => {
+        console.log('录制已停止:', data);
+        setConnectionStatus(String(data.message) || '录制已停止');
+      });
+      
+      connection.on('recording_paused', (data: Record<string, unknown>) => {
+        console.log('录制已暂停:', data);
+        setConnectionStatus(String(data.message) || '录制已暂停');
+      });
+      
+      connection.on('recording_resumed', (data: Record<string, unknown>) => {
+        console.log('录制已恢复:', data);
+        setConnectionStatus(String(data.message) || '录制中...');
+      });
+  
+      connection.on('error', (data: Record<string, unknown>) => {
+        console.error('🔴 WebSocket 错误:', data);
+        const errorCode = String(data.error_code || '');
+        const errorMessage = String(data.message) || '连接错误';
+        
+        if (errorCode === 'AUDIO_FORMAT_ERROR') {
+          console.error('🎵 音频格式错误，可能需要调整音频采集设置');
+          setError('音频格式错误：' + errorMessage);
+          // 不断开连接，让用户重新尝试或调整设置
+        } else {
+          setError(errorMessage);
+          setConnectionState('error');
+        }
+      });
+      
+      console.log('正在连接WebSocket...');
       await connection.connect();
+      console.log('WebSocket连接成功，设置连接对象');
+      // 等待连接建立
+      console.log('⏳ 等待connection_ready事件...');
+      await connectionPromise;
+      console.log('✅ connection_ready事件已收到');
+      
+      // 连接健康检查
+      console.log('✅ WebSocket连接就绪，状态:', connection.ws?.readyState);
+      
       setWsConnection(connection);
+      wsConnectionRef.current = connection;
+      
+      return connection; // 返回连接对象
       
       } catch (error: unknown) {
-    console.error('WebSocket 连接失败:', error);
+    console.error('🔴 WebSocket 连接失败:', error);
     const errorMessage = error instanceof Error ? error.message : '未知错误';
-    setError('连接失败: ' + errorMessage);
+    setError('WebSocket连接失败: ' + errorMessage);
     setConnectionState('error');
     setRecordingState('error');
+    throw error; // 重新抛出错误，阻止 start() 函数继续执行
   }
   };
 
   const addTranscriptItem = (transcriptData: Record<string, unknown>) => {
       const newItem: TranscriptItem = {
-    id: String(transcriptData.id) || Date.now().toString(),
-    text: String(transcriptData.text || transcriptData.transcript || ''),
+    id: String(transcriptData.segment_id) || Date.now().toString(),
+    text: String(transcriptData.text || ''),
     timestamp: Date.now(),
     speaker: transcriptData.speaker ? String(transcriptData.speaker) : undefined,
     confidence: typeof transcriptData.confidence === 'number' ? transcriptData.confidence : undefined,
@@ -382,18 +576,32 @@ const LiveRecord: React.FC = () => {
       const sessionData = await createNewSession();
       
       // 连接 WebSocket
-      await connectWebSocket(sessionData.sessionId);
+      const connection = await connectWebSocket(sessionData.sessionId);
       
       // 开始录音
       if (mediaRecorderRef.current && streamRef.current) {
         audioChunksRef.current = [];
-        mediaRecorderRef.current.start(1000); // 每秒收集一次数据
+        setIsRecordingActive(true); // 激活PCM数据发送
         
         // 通知服务器开始录制
-        wsConnection?.startRecording({
+        console.log('🚀 准备发送录制开始消息，使用连接对象:', !!connection);
+        console.log('🚀 WebSocket连接已建立，调用startRecording');
+        
+        // 添加小延迟确保连接完全稳定
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const audioConfig = {
           sample_rate: 16000,
-          format: 'webm'
-        });
+          format: 'pcm',
+          voice_format: 1,
+          engine_type: '16k_zh'
+        };
+        console.log('🚀 调用startRecording，参数:', audioConfig);
+        
+        connection.startRecording(audioConfig);
+        setSpeechRecognitionStarted(true);
+        
+        console.log('✅ startRecording消息已发送');
         
         setRecordingState('recording');
     setHasStarted(true);
@@ -409,10 +617,23 @@ const LiveRecord: React.FC = () => {
       }
       
       } catch (error: unknown) {
-    console.error('启动录制失败:', error);
+    console.error('🔴 启动录制失败:', error);
     const errorMessage = error instanceof Error ? error.message : '未知错误';
     setError('启动录制失败: ' + errorMessage);
     setRecordingState('error');
+    
+    // 确保清理连接状态
+    setIsRecordingActive(false);
+    setSpeechRecognitionStarted(false);
+    setServerRecordingConfirmed(false);
+    
+    // 如果WebSocket已连接，确保断开连接
+    if (wsConnection) {
+      console.log('🔴 错误发生，断开WebSocket连接');
+      wsConnection.disconnect();
+      setWsConnection(null);
+      wsConnectionRef.current = null;
+    }
   }
   };
 
@@ -421,12 +642,28 @@ const LiveRecord: React.FC = () => {
       setRecordingState('stopped');
       
       // 停止录音
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      setIsRecordingActive(false); // 停止发送PCM数据
+      setSpeechRecognitionStarted(false); // 重置语音识别状态
+      setServerRecordingConfirmed(false); // 重置服务器确认状态
+      if (mediaRecorderRef.current) {
+        // 断开音频节点连接
+        try {
+          mediaRecorderRef.current.disconnect();
+          // AudioContext 会在组件清理时关闭
+        } catch (error) {
+          console.error('停止PCM录制器失败:', error);
+        }
       }
       
       // 通知服务器停止录制
       wsConnection?.stopRecording();
+      
+      // 断开WebSocket连接
+      if (wsConnection) {
+        wsConnection.disconnect();
+        setWsConnection(null);
+        wsConnectionRef.current = null;
+      }
       
       // 停止计时器
       if (timerRef.current) {
@@ -452,8 +689,8 @@ const LiveRecord: React.FC = () => {
   };
 
   const pause = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.pause();
+    if (mediaRecorderRef.current && recordingState === 'recording') {
+      setIsRecordingActive(false); // 停止发送PCM数据
       wsConnection?.sendMessage('pause_recording');
       setRecordingState('paused');
       
@@ -465,8 +702,10 @@ const LiveRecord: React.FC = () => {
   };
 
   const resume = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume();
+    if (mediaRecorderRef.current && recordingState === 'paused') {
+      setIsRecordingActive(true); // 恢复发送PCM数据
+      setSpeechRecognitionStarted(false); // 重置状态，让保险方案重新启动识别
+      setServerRecordingConfirmed(false); // 重置服务器确认状态
       wsConnection?.sendMessage('resume_recording');
       setRecordingState('recording');
       
@@ -484,9 +723,15 @@ const LiveRecord: React.FC = () => {
   };
 
   // 初始化和清理
+  // 组件挂载时初始化音频设备
   useEffect(() => {
     checkAudioDevices();
+  }, [checkAudioDevices]);
+  
+  // 组件卸载时清理资源
+  useEffect(() => {
     return () => {
+      console.log('🧹 组件卸载，清理资源');
       // 清理定时器
       if (timerRef.current) clearInterval(timerRef.current);
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
@@ -500,11 +745,12 @@ const LiveRecord: React.FC = () => {
       }
       
       // 清理 WebSocket 连接
-      if (wsConnection) {
-        wsConnection.disconnect();
+      if (wsConnectionRef.current) {
+        console.log('🧹 组件卸载时断开WebSocket连接');
+        wsConnectionRef.current.disconnect();
       }
     };
-  }, [checkAudioDevices, wsConnection]);
+  }, []); // 空依赖数组，只在组件卸载时运行
 
   const format = (s: number) => {
     const hh = Math.floor(s / 3600);
